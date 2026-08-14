@@ -2,6 +2,8 @@ import { useEffect, useState, type ReactNode } from 'react'
 import { useStore } from '../lib/store'
 import { bmr, dailyCalorieTarget, withProfileDefaults } from '../lib/nutrition'
 import { Sheet } from '../components/ui'
+import { ToolsBoundary } from '../tools/error-boundary'
+import { ToolsSettings } from '../tools/ToolsDock'
 import type { Profile, Sex } from '../types'
 
 export function ProfileSheet() {
@@ -81,6 +83,9 @@ export function ProfileSheet() {
             onChange={(vitaminName) => setDraft({ ...draft, vitaminName })}
           />
         )}
+        <ToolsBoundary name="tools-settings">
+          <ToolsSettings />
+        </ToolsBoundary>
         <button
           onClick={async () => {
             await updateProfile(draft)

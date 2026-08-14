@@ -13,6 +13,8 @@ import { bmi, weeksToGoal } from '../lib/nutrition'
 import { formatLongDate } from '../lib/dates'
 import { weekReport } from '../lib/weekly'
 import { Sheet } from '../components/ui'
+import { ToolsBoundary } from '../tools/error-boundary'
+import { ToolsDock } from '../tools/ToolsDock'
 
 export function ProgressScreen() {
   const { snapshot, setOverlay, removeWeight, date } = useStore()
@@ -149,6 +151,10 @@ export function ProgressScreen() {
             </button>
           ))}
       </section>
+
+      <ToolsBoundary name="dock">
+        <ToolsDock />
+      </ToolsBoundary>
     </div>
   )
 }

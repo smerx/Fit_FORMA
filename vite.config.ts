@@ -2,14 +2,19 @@ import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import { VitePWA } from 'vite-plugin-pwa'
+import { groqProxy } from './vite-groq-proxy.ts'
 
 export default defineConfig({
   plugins: [
     react(),
     tailwindcss(),
+    groqProxy(),
     VitePWA({
       registerType: 'autoUpdate',
       includeAssets: ['favicon.svg', 'apple-touch-icon.png'],
+      workbox: {
+        navigateFallbackDenylist: [/^\/api\//],
+      },
       manifest: {
         name: 'Форма',
         short_name: 'Форма',

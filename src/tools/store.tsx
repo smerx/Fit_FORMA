@@ -9,12 +9,14 @@ import {
 } from 'react'
 import { supabase } from '../lib/supabase'
 import { nid } from '../lib/dates'
-import type { DraftTask, PlanTask, ToolId, ToolSettings, Transcript } from './types'
+import type { DraftTask, PlanNote, PlanTask, ToolId, ToolSettings, Transcript } from './types'
 import { defaultToolSettings } from './types'
 import {
+  deleteNoteRow,
   deleteTaskRow,
   deleteTranscriptRow,
   fetchToolBundle,
+  insertNote,
   insertTask,
   insertTranscript,
   updateTaskRow,
@@ -27,12 +29,14 @@ type Bundle = {
   settings: ToolSettings
   transcripts: Transcript[]
   tasks: PlanTask[]
+  notes: PlanNote[]
 }
 
 const empty: Bundle = {
   settings: defaultToolSettings(),
   transcripts: [],
   tasks: [],
+  notes: [],
 }
 
 function loadLocal(): Bundle {
@@ -43,7 +47,8 @@ function loadLocal(): Bundle {
     return {
       settings: { ...defaultToolSettings(), ...parsed.settings },
       transcripts: parsed.transcripts ?? [],
-      tasks: parsed.tasks ?? [],
+      tasks: (parsed.tasks ?? []).map((t) => ({ ...t, dueTime: t.dueTime ?? null })),
+      notes: parsed.notes ?? [],
     }
   } catch {
     return empty
@@ -57,13 +62,17 @@ type ToolsStore = {
   settings: ToolSettings
   transcripts: Transcript[]
   tasks: PlanTask[]
+  notes: PlanNote[]
   saveSettings: (patch: Partial<ToolSettings>) => Promise<void>
   addTranscript: (input: { text: string; durationSec: number }) => Promise<Transcript>
   removeTranscript: (id: string) => Promise<void>
   addTasks: (drafts: DraftTask[], source: PlanTask['source']) => Promise<void>
-  addTask: (title: string, dueOn: string | null) => Promise<void>
+  addTask: (title: string, dueOn: string | null, dueTime?: string | null) => Promise<void>
   toggleTask: (id: string) => Promise<void>
+  patchTask: (id: string, patch: Partial<Pick<PlanTask, 'dueOn' | 'dueTime' | 'title' | 'done'>>) => Promise<void>
   removeTask: (id: string) => Promise<void>
+  addNote: (body: string) => Promise<void>
+  removeNote: (id: string) => Promise<void>
 }
 
 const Ctx = createContext<ToolsStore | null>(null)
@@ -103,6 +112,7 @@ export function ToolsProvider({ children }: { children: ReactNode }) {
             : { ...defaultToolSettings(), ...remote.settings, groqKey: local.settings.groqKey },
           transcripts: remote.transcripts.length ? remote.transcripts : local.transcripts,
           tasks: remote.tasks.length ? remote.tasks : local.tasks,
+          notes: remote.notes.length ? remote.notes : local.notes,
         })
       })
       .catch(() => {
@@ -177,6 +187,7 @@ export function ToolsProvider({ children }: { children: ReactNode }) {
           title: d.title.trim(),
           notes: d.notes ?? '',
           dueOn: d.dueOn ?? null,
+          dueTime: d.dueTime ?? null,
           done: false,
           source,
           createdAt: new Date().toISOString(),
@@ -192,15 +203,15 @@ export function ToolsProvider({ children }: { children: ReactNode }) {
   )
 
   const addTask = useCallback(
-    async (title: string, dueOn: string | null) => {
-      await addTasks([{ title, dueOn }], 'manual')
+    async (title: string, dueOn: string | null, dueTime?: string | null) => {
+      await addTasks([{ title, dueOn, dueTime: dueTime ?? null }], 'manual')
     },
     [addTasks],
   )
 
-  const toggleTask = useCallback(
-    async (id: string) => {
-      const tasks = bundle.tasks.map((t) => (t.id === id ? { ...t, done: !t.done } : t))
+  const patchTask = useCallback(
+    async (id: string, patch: Partial<Pick<PlanTask, 'dueOn' | 'dueTime' | 'title' | 'done'>>) => {
+      const tasks = bundle.tasks.map((t) => (t.id === id ? { ...t, ...patch } : t))
       const row = tasks.find((t) => t.id === id)
       commit({ ...bundle, tasks })
       if (!row) return
@@ -210,6 +221,15 @@ export function ToolsProvider({ children }: { children: ReactNode }) {
       })
     },
     [bundle, commit, cloud, userId],
+  )
+
+  const toggleTask = useCallback(
+    async (id: string) => {
+      const row = bundle.tasks.find((t) => t.id === id)
+      if (!row) return
+      await patchTask(id, { done: !row.done })
+    },
+    [bundle.tasks, patchTask],
   )
 
   const removeTask = useCallback(
@@ -223,6 +243,31 @@ export function ToolsProvider({ children }: { children: ReactNode }) {
     [bundle, commit, cloud, userId],
   )
 
+  const addNote = useCallback(
+    async (body: string) => {
+      const text = body.trim()
+      if (!text) return
+      const row: PlanNote = { id: nid(), body: text, createdAt: new Date().toISOString() }
+      commit({ ...bundle, notes: [row, ...bundle.notes] })
+      await cloud(async () => {
+        if (!userId) return
+        await insertNote(userId, row)
+      })
+    },
+    [bundle, commit, cloud, userId],
+  )
+
+  const removeNote = useCallback(
+    async (id: string) => {
+      commit({ ...bundle, notes: bundle.notes.filter((n) => n.id !== id) })
+      await cloud(async () => {
+        if (!userId) return
+        await deleteNoteRow(userId, id)
+      })
+    },
+    [bundle, commit, cloud, userId],
+  )
+
   const value = useMemo<ToolsStore>(
     () => ({
       ready,
@@ -231,13 +276,17 @@ export function ToolsProvider({ children }: { children: ReactNode }) {
       settings: bundle.settings,
       transcripts: bundle.transcripts,
       tasks: bundle.tasks,
+      notes: bundle.notes,
       saveSettings,
       addTranscript,
       removeTranscript,
       addTasks,
       addTask,
       toggleTask,
+      patchTask,
       removeTask,
+      addNote,
+      removeNote,
     }),
     [
       ready,
@@ -249,7 +298,10 @@ export function ToolsProvider({ children }: { children: ReactNode }) {
       addTasks,
       addTask,
       toggleTask,
+      patchTask,
       removeTask,
+      addNote,
+      removeNote,
     ],
   )
 

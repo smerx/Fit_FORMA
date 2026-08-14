@@ -22,9 +22,10 @@ const TEMPLATES = [
 
 export type SuggestHit = { title: string; hint: string }
 
-export function parseQuickTask(raw: string): { title: string; dueOn: string | null } {
+export function parseQuickTask(raw: string): { title: string; dueOn: string | null; dueTime: string | null } {
   let text = raw.trim()
   let dueOn: string | null = null
+  let dueTime: string | null = null
   const today = todayIso()
   if (/^сегодня\b/i.test(text)) {
     dueOn = today
@@ -36,7 +37,16 @@ export function parseQuickTask(raw: string): { title: string; dueOn: string | nu
     dueOn = shiftIso(today, 2)
     text = text.replace(/^послезавтра\s*/i, '')
   }
-  return { title: text.trim() || raw.trim(), dueOn }
+  const timeMatch = text.match(/^(\d{1,2})[:.](\d{2})\s+/)
+  if (timeMatch) {
+    const h = Number(timeMatch[1])
+    const m = Number(timeMatch[2])
+    if (h >= 0 && h < 24 && m >= 0 && m < 60) {
+      dueTime = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`
+      text = text.slice(timeMatch[0].length)
+    }
+  }
+  return { title: text.trim() || raw.trim(), dueOn, dueTime }
 }
 
 export function suggestTasks(query: string, existing: PlanTask[]): SuggestHit[] {

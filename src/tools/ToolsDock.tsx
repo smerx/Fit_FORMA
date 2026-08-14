@@ -14,11 +14,11 @@ const ITEMS: { id: ToolId; title: string; sub: string; icon: typeof Mic; flag: '
     {
       id: 'voiceplan',
       title: 'Расшифровка ГС в планирование',
-      sub: 'Голос → текст → чеклист',
+      sub: 'Голос → текст → в календарь',
       icon: AudioLines,
       flag: 'voicePlanOn',
     },
-    { id: 'planner', title: 'Планирование', sub: 'Чеклист с умными подсказками', icon: ListTodo, flag: 'plannerOn' },
+    { id: 'planner', title: 'Планирование', sub: 'Календарь и журнал дел', icon: ListTodo, flag: 'plannerOn' },
   ]
 
 export function ToolsDock() {

@@ -20,8 +20,15 @@ export type PlanTask = {
   title: string
   notes: string
   dueOn: string | null
+  dueTime: string | null
   done: boolean
   source: 'manual' | 'voice' | 'suggest'
+  createdAt: string
+}
+
+export type PlanNote = {
+  id: string
+  body: string
   createdAt: string
 }
 
@@ -29,6 +36,7 @@ export type DraftTask = {
   title: string
   notes?: string
   dueOn?: string | null
+  dueTime?: string | null
 }
 
 export const defaultToolSettings = (): ToolSettings => ({

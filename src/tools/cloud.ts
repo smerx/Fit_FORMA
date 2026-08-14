@@ -1,5 +1,5 @@
 import { supabase } from '../lib/supabase'
-import type { PlanTask, ToolSettings, Transcript } from './types'
+import type { PlanNote, PlanTask, ToolSettings, Transcript } from './types'
 import { defaultToolSettings } from './types'
 
 type SettingsRow = {
@@ -22,8 +22,15 @@ type TaskRow = {
   title: string
   notes: string | null
   due_on: string | null
+  due_time: string | null
   done: boolean
   source: PlanTask['source']
+  created_at: string
+}
+
+type NoteRow = {
+  id: string
+  body: string
   created_at: string
 }
 
@@ -31,12 +38,14 @@ export async function fetchToolBundle(userId: string): Promise<{
   settings: ToolSettings
   transcripts: Transcript[]
   tasks: PlanTask[]
+  notes: PlanNote[]
 } | null> {
   if (!supabase) return null
-  const [setRes, trRes, taskRes] = await Promise.all([
+  const [setRes, trRes, taskRes, noteRes] = await Promise.all([
     supabase.from('tool_settings').select('*').eq('user_id', userId).maybeSingle(),
     supabase.from('tool_transcripts').select('*').eq('user_id', userId).order('created_at', { ascending: false }),
     supabase.from('tool_tasks').select('*').eq('user_id', userId).order('created_at', { ascending: false }),
+    supabase.from('tool_notes').select('*').eq('user_id', userId).order('created_at', { ascending: false }),
   ])
   if (setRes.error && trRes.error && taskRes.error) return null
   const row = setRes.data as SettingsRow | null
@@ -65,8 +74,16 @@ export async function fetchToolBundle(userId: string): Promise<{
           title: r.title,
           notes: r.notes ?? '',
           dueOn: r.due_on,
+          dueTime: r.due_time ?? null,
           done: r.done,
           source: r.source,
+          createdAt: r.created_at,
+        })),
+    notes: noteRes.error
+      ? []
+      : ((noteRes.data ?? []) as NoteRow[]).map((r) => ({
+          id: r.id,
+          body: r.body,
           createdAt: r.created_at,
         })),
   }
@@ -112,6 +129,7 @@ export async function insertTask(userId: string, t: PlanTask) {
     title: t.title,
     notes: t.notes,
     due_on: t.dueOn,
+    due_time: t.dueTime,
     done: t.done,
     source: t.source,
     created_at: t.createdAt,
@@ -123,7 +141,7 @@ export async function updateTaskRow(userId: string, t: PlanTask) {
   if (!supabase) return
   const { error } = await supabase
     .from('tool_tasks')
-    .update({ title: t.title, notes: t.notes, due_on: t.dueOn, done: t.done })
+    .update({ title: t.title, notes: t.notes, due_on: t.dueOn, due_time: t.dueTime, done: t.done })
     .eq('id', t.id)
     .eq('user_id', userId)
   if (error) throw error
@@ -132,5 +150,22 @@ export async function updateTaskRow(userId: string, t: PlanTask) {
 export async function deleteTaskRow(userId: string, id: string) {
   if (!supabase) return
   const { error } = await supabase.from('tool_tasks').delete().eq('id', id).eq('user_id', userId)
+  if (error) throw error
+}
+
+export async function insertNote(userId: string, n: PlanNote) {
+  if (!supabase) return
+  const { error } = await supabase.from('tool_notes').insert({
+    id: n.id,
+    user_id: userId,
+    body: n.body,
+    created_at: n.createdAt,
+  })
+  if (error) throw error
+}
+
+export async function deleteNoteRow(userId: string, id: string) {
+  if (!supabase) return
+  const { error } = await supabase.from('tool_notes').delete().eq('id', id).eq('user_id', userId)
   if (error) throw error
 }

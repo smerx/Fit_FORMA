@@ -4,6 +4,8 @@ import { ACTIVITIES } from '../data/activities'
 import { useStore } from '../lib/store'
 import { activityCalories } from '../lib/nutrition'
 import { Sheet } from '../components/ui'
+import { ToolsBoundary } from '../tools/error-boundary'
+import { TutorsDock } from '../tutors/TutorsDock'
 import type { ActivityTemplate } from '../types'
 
 export function ActivityScreen() {
@@ -45,6 +47,10 @@ export function ActivityScreen() {
         <div className="text-4xl font-extrabold text-mint">{burned}</div>
         <div className="text-sm text-white/40">ккал</div>
       </div>
+
+      <ToolsBoundary name="tutors-dock">
+        <TutorsDock />
+      </ToolsBoundary>
 
       <div className="grid grid-cols-1 gap-2">
         {ACTIVITIES.map((a) => (

@@ -5,6 +5,7 @@ import './index.css'
 import App from './App.tsx'
 import { StoreProvider } from './lib/store.tsx'
 import { ToolsProvider } from './tools/store.tsx'
+import { TutorsProvider } from './tutors/store.tsx'
 
 registerSW({ immediate: true })
 
@@ -12,7 +13,9 @@ createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <StoreProvider>
       <ToolsProvider>
-        <App />
+        <TutorsProvider>
+          <App />
+        </TutorsProvider>
       </ToolsProvider>
     </StoreProvider>
   </StrictMode>,

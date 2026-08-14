@@ -4,6 +4,7 @@ import { bmr, dailyCalorieTarget, withProfileDefaults } from '../lib/nutrition'
 import { Sheet } from '../components/ui'
 import { ToolsBoundary } from '../tools/error-boundary'
 import { ToolsSettings } from '../tools/ToolsDock'
+import { TutorsSettings } from '../tutors/TutorsDock'
 import type { Profile, Sex } from '../types'
 
 export function ProfileSheet() {
@@ -85,6 +86,9 @@ export function ProfileSheet() {
         )}
         <ToolsBoundary name="tools-settings">
           <ToolsSettings />
+        </ToolsBoundary>
+        <ToolsBoundary name="tutors-settings">
+          <TutorsSettings />
         </ToolsBoundary>
         <button
           onClick={async () => {

@@ -221,6 +221,7 @@ create table if not exists public.tutor_students (
   duration_min integer not null default 60,
   weekdays integer[] not null default '{}',
   time_hm text not null default '16:00',
+  schedule jsonb,
   active boolean not null default true,
   pack_started_on date,
   note text,
@@ -258,3 +259,4 @@ create policy "own tutor lessons" on public.tutor_lessons
 
 alter table public.tutor_settings add column if not exists reminders_on boolean not null default true;
 alter table public.tutor_settings add column if not exists pay_details text not null default '89041237534 Сбербанк, Дмитрий Андреевич.';
+alter table public.tutor_students add column if not exists schedule jsonb;

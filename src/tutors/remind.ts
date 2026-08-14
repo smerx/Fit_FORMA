@@ -1,5 +1,5 @@
 import type { TutorLesson, TutorStudent } from './types'
-import { isRegularOn, lessonOn } from './money'
+import { isRegularOn, lessonOn, timeOn } from './money'
 import { shiftIso, todayIso } from '../lib/dates'
 
 export type UpcomingLesson = {
@@ -35,8 +35,8 @@ export function upcomingLessons(
         studentId: s.id,
         name: s.name,
         date: iso,
-        timeHm: s.timeHm,
-        at: atLocal(iso, s.timeHm),
+        timeHm: timeOn(s, iso),
+        at: atLocal(iso, timeOn(s, iso)),
       })
     }
   }

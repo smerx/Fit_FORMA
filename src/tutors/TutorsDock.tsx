@@ -78,7 +78,7 @@ export function TutorsSettings() {
     <div className="space-y-3 rounded-3xl bg-white/5 p-3">
       <div className="text-sm font-semibold">Ученики</div>
       <p className="text-[11px] text-white/40">
-        Отдельное приложение на вкладке «Движение». Можно выключить — калории и остальные инструменты не заденет.
+        Отдельное приложение внизу вкладки «Прогресс», рядом с голосом и календарём. Можно выключить — еда не заденет.
       </p>
       <label className="flex items-center justify-between py-1 text-sm">
         <span>Показывать учеников</span>

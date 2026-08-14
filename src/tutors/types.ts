@@ -7,12 +7,15 @@ export type TutorSettings = {
   payDetails: string
 }
 
+export type TutorSlot = { weekday: number; timeHm: string }
+
 export type TutorStudent = {
   id: string
   name: string
   payKind: PayKind
   priceRub: number
   durationMin: number
+  slots: TutorSlot[]
   weekdays: number[]
   timeHm: string
   active: boolean

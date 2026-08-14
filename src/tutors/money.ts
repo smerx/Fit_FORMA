@@ -1,6 +1,6 @@
 import { addDays, differenceInCalendarDays, format, getISODay, parseISO } from 'date-fns'
 import { shiftIso } from '../lib/dates'
-import type { PayKind, TutorLesson, TutorStudent } from './types'
+import type { PayKind, TutorLesson, TutorSlot, TutorStudent } from './types'
 import { WEEKDAYS } from './types'
 import { instrumentalName } from './names'
 
@@ -34,17 +34,43 @@ export function remainingInPack(s: TutorStudent, lessons: TutorLesson[]): number
   return Math.max(0, size - usedInPack(s, lessons))
 }
 
-export function weekdayNames(days: number[]): string {
-  return days
+export function hydrateStudent(raw: Partial<TutorStudent> & { slots?: TutorSlot[] }): TutorStudent {
+  const slots =
+    raw.slots && raw.slots.length > 0
+      ? raw.slots.map((x) => ({ weekday: x.weekday, timeHm: x.timeHm || raw.timeHm || '16:00' }))
+      : (raw.weekdays ?? []).map((weekday) => ({ weekday, timeHm: raw.timeHm || '16:00' }))
+  return {
+    id: raw.id ?? '',
+    name: raw.name ?? '',
+    payKind: raw.payKind ?? 'pack8',
+    priceRub: raw.priceRub ?? 0,
+    durationMin: raw.durationMin ?? 60,
+    slots,
+    weekdays: slots.map((x) => x.weekday),
+    timeHm: slots[0]?.timeHm ?? raw.timeHm ?? '16:00',
+    active: raw.active ?? true,
+    packStartedOn: raw.packStartedOn ?? null,
+    note: raw.note ?? '',
+    createdAt: raw.createdAt ?? '',
+  }
+}
+
+export function timeOn(s: TutorStudent, iso: string): string {
+  const wd = getISODay(parseISO(iso))
+  return s.slots.find((x) => x.weekday === wd)?.timeHm ?? s.timeHm
+}
+
+export function scheduleLabel(s: TutorStudent): string {
+  return s.slots
     .slice()
-    .sort((a, b) => a - b)
-    .map((n) => WEEKDAYS.find((w) => w.n === n)?.s ?? '')
-    .filter(Boolean)
-    .join(', ')
+    .sort((a, b) => a.weekday - b.weekday)
+    .map((x) => `${WEEKDAYS.find((w) => w.n === x.weekday)?.s ?? ''} ${x.timeHm}`)
+    .join(' · ')
 }
 
 export function isRegularOn(s: TutorStudent, iso: string): boolean {
-  return s.active && s.weekdays.includes(getISODay(parseISO(iso)))
+  const wd = getISODay(parseISO(iso))
+  return s.active && s.slots.some((x) => x.weekday === wd)
 }
 
 export function lessonOn(lessons: TutorLesson[], studentId: string, iso: string): TutorLesson | undefined {
@@ -72,7 +98,7 @@ export function nextRegularDates(
   count: number,
   lessons: TutorLesson[],
 ): string[] {
-  if (!s.weekdays.length || count <= 0) return []
+  if (!s.slots.length || count <= 0) return []
   const out: string[] = []
   let iso = fromIso
   for (let i = 0; i < 420 && out.length < count; i++) {
@@ -82,26 +108,32 @@ export function nextRegularDates(
   return out
 }
 
-export function packDatesForPayment(s: TutorStudent, lessons: TutorLesson[], today: string): string[] {
+export type PayLine = { date: string; skipped: boolean }
+
+export function packEntriesForPayment(s: TutorStudent, lessons: TutorLesson[], today: string): PayLine[] {
   const size = packSize(s.payKind) ?? 1
   const start = s.packStartedOn ?? today
   const used = lessons
     .filter((l) => l.studentId === s.id && l.date >= start && countsForPack(l.status))
-    .map((l) => l.date)
-    .sort()
+    .slice()
+    .sort((a, b) => a.date.localeCompare(b.date))
+  const usedLines: PayLine[] = used.map((l) => ({ date: l.date, skipped: l.status === 'skipped' }))
   if (s.payKind === 'hourly') {
-    const last = used.slice(-8)
+    const last = usedLines.slice(-8)
     if (last.length) return last
-    return nextRegularDates(s, today, 4, lessons)
+    return nextRegularDates(s, today, 4, lessons).map((date) => ({ date, skipped: false }))
   }
-  if (used.length >= size) return used.slice(-size)
-  const need = size - used.length
-  const from = used.length ? shiftIso(used[used.length - 1]!, 1) : start < today ? today : start
-  return [...used, ...nextRegularDates(s, from, need, lessons)].slice(0, size)
+  if (usedLines.length >= size) return usedLines.slice(-size)
+  const need = size - usedLines.length
+  const from = usedLines.length ? shiftIso(usedLines[usedLines.length - 1]!.date, 1) : start < today ? today : start
+  const extra = nextRegularDates(s, from, need, lessons).map((date) => ({ date, skipped: false }))
+  return [...usedLines, ...extra].slice(0, size)
 }
 
-export function paymentText(s: TutorStudent, dates: string[], payDetails: string): string {
-  const lines = dates.map((d, i) => `${i + 1}) ${format(parseISO(d), 'dd.MM')}`)
+export function paymentText(s: TutorStudent, lines: PayLine[], payDetails: string): string {
+  const rows = lines.map(
+    (d, i) => `${i + 1}) ${format(parseISO(d.date), 'dd.MM')}${d.skipped ? ' (п.б.ув.пр)' : ''}`,
+  )
   const named = instrumentalName(s.name)
   const sum = rub(s.priceRub)
   const intro =
@@ -115,7 +147,7 @@ export function paymentText(s: TutorStudent, dates: string[], payDetails: string
   return [
     intro,
     'Даты занятия:',
-    ...lines,
+    ...rows,
     '',
     payLine,
     '',
@@ -153,18 +185,43 @@ export function expectedInDays(
   const end = format(addDays(parseISO(today), days - 1), 'yyyy-MM-dd')
   let sum = 0
   for (const s of students.filter((x) => x.active)) {
-    const unit = lessonValue(s)
-    const seen = new Set<string>()
-    for (let iso = today; iso <= end; iso = shiftIso(iso, 1)) {
-      const rec = lessonOn(lessons, s.id, iso)
-      if (rec?.status === 'cancelled') continue
-      const happens = rec ? countsForPack(rec.status) : isRegularOn(s, iso)
-      if (!happens || seen.has(iso)) continue
-      seen.add(iso)
-      sum += unit
-    }
+    sum += cashInWindow(s, lessons, today, end)
   }
   return { expected: sum, cautious: Math.round(sum * 0.88) }
+}
+
+function lessonHappens(s: TutorStudent, lessons: TutorLesson[], iso: string): boolean {
+  const rec = lessonOn(lessons, s.id, iso)
+  if (rec?.status === 'cancelled') return false
+  if (rec) return countsForPack(rec.status)
+  return isRegularOn(s, iso)
+}
+
+function cashInWindow(s: TutorStudent, lessons: TutorLesson[], today: string, end: string): number {
+  if (s.payKind === 'hourly') {
+    let sum = 0
+    for (let iso = today; iso <= end; iso = shiftIso(iso, 1)) {
+      if (lessonHappens(s, lessons, iso)) sum += lessonValue(s)
+    }
+    return sum
+  }
+  const size = packSize(s.payKind)
+  if (!size) return 0
+  let left = remainingInPack(s, lessons) ?? size
+  let sum = 0
+  if (left === 0) {
+    if (today <= end) sum += s.priceRub
+    left = size
+  }
+  for (let iso = today; iso <= end; iso = shiftIso(iso, 1)) {
+    if (!lessonHappens(s, lessons, iso)) continue
+    left -= 1
+    if (left === 0) {
+      sum += s.priceRub
+      left = size
+    }
+  }
+  return sum
 }
 
 export function rub(n: number): string {

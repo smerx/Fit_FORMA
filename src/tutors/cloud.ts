@@ -1,6 +1,7 @@
 import { supabase } from '../lib/supabase'
 import type { LessonStatus, PayKind, TutorLesson, TutorSettings, TutorStudent } from './types'
 import { defaultTutorSettings } from './types'
+import { hydrateStudent } from './money'
 
 type SettingsRow = {
   enabled: boolean
@@ -16,6 +17,7 @@ type StudentRow = {
   duration_min: number
   weekdays: number[] | null
   time_hm: string | null
+  schedule?: { weekday: number; timeHm: string }[] | null
   active: boolean
   pack_started_on: string | null
   note: string | null
@@ -31,7 +33,7 @@ type LessonRow = {
 }
 
 function mapStudent(r: StudentRow): TutorStudent {
-  return {
+  return hydrateStudent({
     id: r.id,
     name: r.name,
     payKind: r.pay_kind,
@@ -39,11 +41,12 @@ function mapStudent(r: StudentRow): TutorStudent {
     durationMin: r.duration_min,
     weekdays: r.weekdays ?? [],
     timeHm: r.time_hm ?? '16:00',
+    slots: r.schedule ?? [],
     active: r.active,
     packStartedOn: r.pack_started_on,
     note: r.note ?? '',
     createdAt: r.created_at,
-  }
+  })
 }
 
 export async function fetchTutorBundle(userId: string): Promise<{
@@ -94,20 +97,24 @@ export async function upsertTutorSettings(userId: string, s: TutorSettings) {
 
 export async function upsertStudentRow(userId: string, s: TutorStudent) {
   if (!supabase) return
-  const { error } = await supabase.from('tutor_students').upsert({
+  const base = {
     id: s.id,
     user_id: userId,
     name: s.name,
     pay_kind: s.payKind,
     price_rub: s.priceRub,
     duration_min: s.durationMin,
-    weekdays: s.weekdays,
-    time_hm: s.timeHm,
+    weekdays: s.slots.map((x) => x.weekday),
+    time_hm: s.slots[0]?.timeHm ?? s.timeHm,
     active: s.active,
     pack_started_on: s.packStartedOn,
     note: s.note,
     created_at: s.createdAt,
-  })
+  }
+  const withSchedule = { ...base, schedule: s.slots }
+  const first = await supabase.from('tutor_students').upsert(withSchedule)
+  if (!first.error) return
+  const { error } = await supabase.from('tutor_students').upsert(base)
   if (error) throw error
 }
 

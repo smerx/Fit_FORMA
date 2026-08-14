@@ -1,17 +1,18 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { ChevronLeft, ChevronRight, Copy, Plus, Trash2 } from 'lucide-react'
 import { formatDayTitle, formatWeekday, shiftIso, todayIso } from '../lib/dates'
 import {
   expectedInDays,
   isRegularOn,
   lessonOn,
-  packDatesForPayment,
+  packEntriesForPayment,
   payHint,
   paymentText,
   remainingInPack,
   rosterIds,
   rub,
-  weekdayNames,
+  scheduleLabel,
+  timeOn,
 } from './money'
 import { defaultStudentDraft, useTutors } from './store'
 import type { TutorStudent } from './types'
@@ -64,7 +65,7 @@ function DayPane({ onAdd }: { onAdd: () => void }) {
   const rows = ids
     .map((id) => students.find((s) => s.id === id))
     .filter((s): s is TutorStudent => Boolean(s))
-    .sort((a, b) => a.timeHm.localeCompare(b.timeHm) || a.name.localeCompare(b.name, 'ru'))
+    .sort((a, b) => timeOn(a, date).localeCompare(timeOn(b, date)) || a.name.localeCompare(b.name, 'ru'))
   const extras = students.filter((s) => s.active && !ids.includes(s.id))
 
   return (
@@ -89,7 +90,7 @@ function DayPane({ onAdd }: { onAdd: () => void }) {
         )}
       </header>
       <p className="text-sm text-white/45">
-        Кто по расписанию — уже здесь. Перенос: «на этот день». Пропуск считает занятие в абонементе, отмена — нет.
+        Пропуск — занятие оплачивают, в шаблоне будет (п.б.ув.пр). Отмена — нет. Перенос: «на этот день».
       </p>
       {rows.length === 0 && <p className="text-sm text-white/30">На этот день никого. Можно добавить перенос.</p>}
       <div className="space-y-2">
@@ -102,7 +103,7 @@ function DayPane({ onAdd }: { onAdd: () => void }) {
                 <div className="min-w-0">
                   <div className="font-semibold">{s.name}</div>
                   <div className="text-[11px] text-white/40">
-                    {s.timeHm} · {PAY_KIND_LABEL[s.payKind]}
+                    {timeOn(s, date)} · {PAY_KIND_LABEL[s.payKind]}
                     {regular ? '' : ' · перенос'}
                   </div>
                 </div>
@@ -205,10 +206,10 @@ function ListPane({ onNew, onOpen }: { onNew: () => void; onOpen: (id: string) =
           >
             <div className="flex items-baseline justify-between gap-2">
               <span className={`font-semibold ${s.active ? '' : 'text-white/35'}`}>{s.name}</span>
-              <span className="text-[11px] text-white/40">{s.timeHm}</span>
+              <span className="text-[11px] text-white/40">{scheduleLabel(s) || s.timeHm}</span>
             </div>
             <div className="mt-1 text-xs text-white/45">
-              {PAY_KIND_LABEL[s.payKind]} · {weekdayNames(s.weekdays) || 'дни не заданы'}
+              {PAY_KIND_LABEL[s.payKind]}
               {left != null ? ` · осталось ${left}` : ''}
             </div>
             <div className="mt-1 text-sm text-mint">{payHint(s, lessons, today)}</div>
@@ -228,7 +229,7 @@ function MoneyPane() {
   return (
     <div className="space-y-3">
       <p className="text-sm text-white/45">
-        По расписанию, минус отмены, плюс переносы. «Осторожно» — минус ~12% на пропуски. Если в месяце 5 воскресений, пятое занятие тоже входит — поэтому сумма может быть больше «ровного» абонемента.
+        Считаем живые оплаты: когда кончается абонемент и приходят деньги. Если следующая оплата через 2 недели — на этой неделе 0. «Осторожно» минус ~12%.
       </p>
       <Forecast title="Неделя" main={w.expected} cautious={w.cautious} />
       <Forecast title="Две недели" main={t.expected} cautious={t.cautious} />
@@ -254,7 +255,7 @@ function StudentForm({ edit, onClose }: { edit: Exclude<Edit, null>; onClose: ()
   const [draft, setDraft] = useState(() => existing ?? defaultStudentDraft(today))
   const [copied, setCopied] = useState(false)
   const dates = useMemo(
-    () => (existing ? packDatesForPayment(existing, lessons, today) : []),
+    () => (existing ? packEntriesForPayment(existing, lessons, today) : []),
     [existing, lessons, today],
   )
   const text = existing
@@ -309,35 +310,65 @@ function StudentForm({ edit, onClose }: { edit: Exclude<Edit, null>; onClose: ()
         />
         <Num label="Минуты" value={draft.durationMin} onChange={(durationMin) => setDraft({ ...draft, durationMin })} />
       </div>
-      <div className="text-xs text-white/45">Регулярные дни</div>
-      <div className="grid grid-cols-7 gap-1">
-        {WEEKDAYS.map((w) => {
-          const on = draft.weekdays.includes(w.n)
-          return (
-            <button
-              key={w.n}
-              onClick={() =>
+      <div className="text-xs text-white/45">Дни и время — у каждого дня своё</div>
+      <p className="text-[11px] text-white/35">
+        Смена расписания не трогает уже отмеченные занятия. Они остаются в абонементе.
+      </p>
+      <div className="space-y-2">
+        {draft.slots.map((slot, i) => (
+          <div key={`${slot.weekday}-${i}`} className="flex items-center gap-2">
+            <select
+              value={slot.weekday}
+              onChange={(e) => {
+                const weekday = Number(e.target.value)
                 setDraft({
                   ...draft,
-                  weekdays: on ? draft.weekdays.filter((n) => n !== w.n) : [...draft.weekdays, w.n],
+                  slots: draft.slots.map((x, j) => (j === i ? { ...x, weekday } : x)),
+                })
+              }}
+              className="h-12 flex-1 rounded-2xl bg-white/8 px-3 text-sm outline-none"
+            >
+              {WEEKDAYS.map((w) => (
+                <option key={w.n} value={w.n}>
+                  {w.s}
+                </option>
+              ))}
+            </select>
+            <input
+              type="time"
+              value={slot.timeHm}
+              onChange={(e) =>
+                setDraft({
+                  ...draft,
+                  slots: draft.slots.map((x, j) => (j === i ? { ...x, timeHm: e.target.value } : x)),
                 })
               }
-              className={`h-10 rounded-xl text-xs font-semibold ${on ? 'bg-mint text-bg' : 'bg-white/8'}`}
+              className="h-12 w-32 rounded-2xl bg-white/8 px-3 outline-none"
+            />
+            <button
+              onClick={() => setDraft({ ...draft, slots: draft.slots.filter((_, j) => j !== i) })}
+              className="flex h-12 w-12 items-center justify-center text-white/30"
             >
-              {w.s}
+              <Trash2 size={16} />
             </button>
-          )
-        })}
+          </div>
+        ))}
       </div>
-      <label className="block">
-        <span className="mb-1 block text-xs text-white/45">Время</span>
-        <input
-          type="time"
-          value={draft.timeHm}
-          onChange={(e) => setDraft({ ...draft, timeHm: e.target.value })}
-          className="h-12 w-full rounded-2xl bg-white/8 px-3 outline-none"
-        />
-      </label>
+      {draft.slots.length < 7 && (
+        <button
+          onClick={() => {
+            const used = new Set(draft.slots.map((x) => x.weekday))
+            const next = WEEKDAYS.find((w) => !used.has(w.n))?.n ?? 1
+            setDraft({
+              ...draft,
+              slots: [...draft.slots, { weekday: next, timeHm: draft.slots.at(-1)?.timeHm ?? '16:00' }],
+            })
+          }}
+          className="h-11 w-full rounded-2xl bg-white/8 text-sm font-semibold"
+        >
+          Ещё день
+        </button>
+      )}
       {draft.payKind !== 'hourly' && (
         <label className="block">
           <span className="mb-1 block text-xs text-white/45">Текущий абонемент с</span>
@@ -347,6 +378,10 @@ function StudentForm({ edit, onClose }: { edit: Exclude<Edit, null>; onClose: ()
             onChange={(e) => setDraft({ ...draft, packStartedOn: e.target.value })}
             className="h-12 w-full rounded-2xl bg-white/8 px-3 outline-none"
           />
+          <p className="mt-1 text-[11px] text-white/35">
+            С этой даты считаются «пришёл» и «пропуск». Отмена не считается. Когда занятия в абонементе кончились,
+            следующее отмеченное — начало нового. Дату можно поставить руками, если надо пересчитать.
+          </p>
         </label>
       )}
       <label className="flex items-center justify-between rounded-2xl bg-white/5 px-3 py-3">
@@ -358,7 +393,7 @@ function StudentForm({ edit, onClose }: { edit: Exclude<Edit, null>; onClose: ()
         />
       </label>
       <button
-        disabled={!draft.name.trim() || !draft.weekdays.length}
+        disabled={!draft.name.trim() || !draft.slots.length}
         onClick={async () => {
           await saveStudent(edit.mode === 'edit' ? { ...draft, id: edit.id } : draft)
           onClose()
@@ -408,13 +443,24 @@ function Field({ label, value, onChange }: { label: string; value: string; onCha
 }
 
 function Num({ label, value, onChange }: { label: string; value: number; onChange: (v: number) => void }) {
+  const [text, setText] = useState(value ? String(value) : '')
+  useEffect(() => {
+    setText(value ? String(value) : '')
+  }, [value])
   return (
     <label className="block">
       <span className="mb-1 block text-xs text-white/45">{label}</span>
       <input
-        type="number"
-        value={value}
-        onChange={(e) => onChange(Number(e.target.value) || 0)}
+        inputMode="numeric"
+        value={text}
+        onChange={(e) => {
+          const raw = e.target.value.replace(/\D/g, '')
+          setText(raw)
+          if (raw !== '') onChange(Number(raw))
+        }}
+        onBlur={() => {
+          if (text === '') onChange(0)
+        }}
         className="h-12 w-full rounded-2xl bg-white/8 px-3 outline-none"
       />
     </label>

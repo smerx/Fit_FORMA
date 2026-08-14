@@ -15,6 +15,7 @@ import { weekReport } from '../lib/weekly'
 import { Sheet } from '../components/ui'
 import { ToolsBoundary } from '../tools/error-boundary'
 import { ToolsDock } from '../tools/ToolsDock'
+import { TutorsDock } from '../tutors/TutorsDock'
 
 export function ProgressScreen() {
   const { snapshot, setOverlay, removeWeight, date } = useStore()
@@ -152,6 +153,9 @@ export function ProgressScreen() {
           ))}
       </section>
 
+      <ToolsBoundary name="tutors-dock">
+        <TutorsDock />
+      </ToolsBoundary>
       <ToolsBoundary name="dock">
         <ToolsDock />
       </ToolsBoundary>

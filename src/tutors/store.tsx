@@ -11,7 +11,7 @@ import { supabase } from '../lib/supabase'
 import { nid } from '../lib/dates'
 import type { LessonStatus, PayKind, TutorLesson, TutorSettings, TutorStudent } from './types'
 import { defaultTutorSettings } from './types'
-import { packSize, usedInPack } from './money'
+import { hydrateStudent, packSize, usedInPack } from './money'
 import { syncLessonReminders } from './remind'
 import {
   deleteLessonRow,
@@ -36,6 +36,21 @@ const empty: Bundle = {
   lessons: [],
 }
 
+function mergeStudents(local: TutorStudent[], remote: TutorStudent[]): TutorStudent[] {
+  if (!remote.length) return local.map((s) => hydrateStudent(s))
+  const localById = new Map(local.map((s) => [s.id, s]))
+  const remoteIds = new Set(remote.map((s) => s.id))
+  const merged = remote.map((r) => {
+    const l = localById.get(r.id)
+    if (!l) return hydrateStudent(r)
+    const remoteFlat = new Set(r.slots.map((x) => x.timeHm)).size <= 1
+    const localVaried = new Set(l.slots.map((x) => x.timeHm)).size > 1
+    if (localVaried && remoteFlat) return hydrateStudent({ ...r, slots: l.slots })
+    return hydrateStudent({ ...r, slots: r.slots.length ? r.slots : l.slots })
+  })
+  return [...merged, ...local.filter((s) => !remoteIds.has(s.id)).map((s) => hydrateStudent(s))]
+}
+
 function loadLocal(): Bundle {
   try {
     const raw = localStorage.getItem(KEY)
@@ -43,7 +58,7 @@ function loadLocal(): Bundle {
     const parsed = JSON.parse(raw) as Partial<Bundle>
     return {
       settings: { ...defaultTutorSettings(), ...parsed.settings },
-      students: parsed.students ?? [],
+      students: (parsed.students ?? []).map((s) => hydrateStudent(s)),
       lessons: parsed.lessons ?? [],
     }
   } catch {
@@ -97,7 +112,7 @@ export function TutorsProvider({ children }: { children: ReactNode }) {
         const local = loadLocal()
         commit({
           settings: { ...defaultTutorSettings(), ...local.settings, ...remote.settings },
-          students: remote.students.length ? remote.students : local.students,
+          students: mergeStudents(local.students, remote.students),
           lessons: remote.lessons.length ? remote.lessons : local.lessons,
         })
       })
@@ -150,19 +165,20 @@ export function TutorsProvider({ children }: { children: ReactNode }) {
   const saveStudent = useCallback(
     async (input: Omit<TutorStudent, 'id' | 'createdAt'> & { id?: string }) => {
       const existing = input.id ? bundle.students.find((s) => s.id === input.id) : undefined
-      const row: TutorStudent = {
+      const row = hydrateStudent({
         id: existing?.id ?? nid(),
         createdAt: existing?.createdAt ?? new Date().toISOString(),
         name: input.name.trim(),
         payKind: input.payKind,
         priceRub: input.priceRub,
         durationMin: input.durationMin,
+        slots: input.slots,
         weekdays: input.weekdays,
         timeHm: input.timeHm,
         active: input.active,
         packStartedOn: input.packStartedOn,
         note: input.note,
-      }
+      })
       const students = existing
         ? bundle.students.map((s) => (s.id === row.id ? row : s))
         : [...bundle.students, row]
@@ -269,6 +285,7 @@ export const defaultStudentDraft = (
   durationMin: 60,
   weekdays: [],
   timeHm: '16:00',
+  slots: [{ weekday: 7, timeHm: '16:00' }],
   active: true,
   packStartedOn: today,
   note: '',

@@ -1,0 +1,82 @@
+import type { ActivityTemplate } from '../types'
+
+export const ACTIVITIES: ActivityTemplate[] = [
+  {
+    id: 'mowing',
+    name: 'Покос травы',
+    met: 5.5,
+    emoji: '🌿',
+    hint: 'Газонокосилка, триммер, ручная коса',
+  },
+  {
+    id: 'wood',
+    name: 'Работа с древесиной',
+    met: 4.5,
+    emoji: '🪵',
+    hint: 'Пиление, рубка, столярка',
+  },
+  {
+    id: 'elliptical-easy',
+    name: 'Эллипсоид · лёгкий',
+    met: 5,
+    emoji: '🏃',
+    hint: 'Спокойный темп',
+  },
+  {
+    id: 'elliptical-mid',
+    name: 'Эллипсоид · средний',
+    met: 7,
+    emoji: '🏃',
+    hint: 'Уверенный темп',
+  },
+  {
+    id: 'elliptical-hard',
+    name: 'Эллипсоид · интенсивный',
+    met: 9,
+    emoji: '🏃',
+    hint: 'Высокая нагрузка',
+  },
+  {
+    id: 'programming',
+    name: 'Программирование',
+    met: 1.5,
+    emoji: '💻',
+    hint: 'Сидячая работа за компьютером',
+  },
+  {
+    id: 'tutoring',
+    name: 'Репетиторство',
+    met: 1.8,
+    emoji: '📚',
+    hint: 'Занятие сидя или у доски',
+  },
+  {
+    id: 'walk',
+    name: 'Ходьба',
+    met: 3.5,
+    emoji: '🚶',
+    hint: 'Спокойный шаг',
+  },
+  {
+    id: 'walk-fast',
+    name: 'Ходьба быстрая',
+    met: 4.8,
+    emoji: '🚶',
+    hint: 'Темп, когда слегка тяжело говорить',
+  },
+  {
+    id: 'chores',
+    name: 'Домашние дела',
+    met: 3.3,
+    emoji: '🧹',
+    hint: 'Уборка, сад, перестановка',
+  },
+  {
+    id: 'custom',
+    name: 'Своя активность',
+    met: 4,
+    emoji: '⚡',
+    hint: 'Задай название и MET вручную',
+    custom: true,
+  },
+]

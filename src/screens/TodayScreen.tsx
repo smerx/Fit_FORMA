@@ -55,20 +55,22 @@ export function TodayScreen() {
         </button>
       </header>
 
-      <section className="relative overflow-hidden rounded-[28px] bg-card p-4">
-        <div className="flex items-center gap-2">
+      <section className="relative overflow-hidden rounded-[28px] bg-card px-3 py-4">
+        <div className="flex justify-center">
           <div className="relative">
-            <CalorieRing eaten={eaten.kcal} target={target} />
+            <CalorieRing eaten={eaten.kcal} target={target} size={148} />
             <div className="absolute inset-0 flex flex-col items-center justify-center">
-              <div className="text-4xl font-extrabold leading-none">{left}</div>
-              <div className="mt-1 text-[11px] uppercase tracking-wide text-white/40">осталось</div>
+              <div className="text-[34px] font-extrabold leading-none tabular-nums">{left}</div>
+              <div className="mt-1 text-[10px] font-semibold uppercase tracking-wide text-white/40">
+                осталось
+              </div>
             </div>
           </div>
-          <div className="flex-1 space-y-2 text-sm">
-            <Row k="Цель" v={`${target} ккал`} />
-            <Row k="Съедено" v={`${eaten.kcal} ккал`} />
-            <Row k="Активность" v={`+${burned} ккал`} />
-          </div>
+        </div>
+        <div className="mt-3 grid grid-cols-3 gap-1">
+          <Stat k="Цель" v={String(target)} />
+          <Stat k="Съедено" v={String(eaten.kcal)} />
+          <Stat k="Активность" v={`+${burned}`} accent />
         </div>
         <div className="mt-4 flex gap-3">
           <MacroBar label="Белки" value={eaten.protein} color="#6ea8ff" />
@@ -151,11 +153,16 @@ export function TodayScreen() {
   )
 }
 
-function Row({ k, v }: { k: string; v: string }) {
+function Stat({ k, v, accent }: { k: string; v: string; accent?: boolean }) {
   return (
-    <div className="flex items-center justify-between text-white/70">
-      <span>{k}</span>
-      <span className="font-semibold text-white">{v}</span>
+    <div className="rounded-2xl bg-white/4 px-1 py-2 text-center">
+      <div className="text-[11px] text-white/45">{k}</div>
+      <div
+        className={`mt-0.5 text-lg font-extrabold leading-none tabular-nums ${accent ? 'text-mint' : 'text-white'}`}
+      >
+        {v}
+      </div>
+      <div className="mt-0.5 text-[10px] text-white/35">ккал</div>
     </div>
   )
 }

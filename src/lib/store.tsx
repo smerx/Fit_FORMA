@@ -16,18 +16,24 @@ import type {
   MealType,
   Profile,
   TabId,
+  VitaminEntry,
+  WaterEntry,
   WeightLog,
 } from '../types'
 import { FOOD_BY_ID } from '../data/foods'
 import { nid, todayIso } from './dates'
-import { activityCalories, macrosForGrams } from './nutrition'
+import { activityCalories, macrosForGrams, withProfileDefaults } from './nutrition'
 import {
   deleteActivityRow,
   deleteFoodRow,
+  deleteVitaminRow,
+  deleteWaterRow,
   deleteWeightRow,
   fetchSnapshot,
   insertActivity,
   insertFood,
+  insertVitamin,
+  insertWater,
   insertWeight,
   setFavorite,
   supabase,
@@ -42,6 +48,8 @@ const empty: AppSnapshot = {
   foodEntries: [],
   activityEntries: [],
   weightLogs: [],
+  waterEntries: [],
+  vitaminEntries: [],
   favorites: [],
   favoriteItems: [],
   recentFoods: [],
@@ -62,7 +70,15 @@ function loadLocal(): AppSnapshot {
       (parsed.favorites ?? [])
         .map((id) => FOOD_BY_ID.get(id))
         .filter((x): x is NonNullable<typeof x> => Boolean(x))
-    return { ...empty, ...parsed, recentFoods, favoriteItems }
+    return {
+      ...empty,
+      ...parsed,
+      profile: parsed.profile ? withProfileDefaults(parsed.profile) : null,
+      waterEntries: parsed.waterEntries ?? [],
+      vitaminEntries: parsed.vitaminEntries ?? [],
+      recentFoods,
+      favoriteItems,
+    }
   } catch {
     return empty
   }
@@ -80,6 +96,7 @@ type Overlay =
   | { type: 'custom-food'; meal: MealType }
   | { type: 'weight' }
   | { type: 'profile' }
+  | { type: 'barcode'; meal: MealType }
 
 type Store = {
   ready: boolean
@@ -119,6 +136,9 @@ type Store = {
   removeWeight: (id: string) => Promise<void>
   toggleFavorite: (food: FoodItem) => Promise<void>
   copyYesterday: () => Promise<void>
+  addWater: (ml: number) => Promise<void>
+  removeWater: (id: string) => Promise<void>
+  toggleVitamin: () => Promise<void>
 }
 
 const Ctx = createContext<Store | null>(null)
@@ -178,6 +198,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
             ? remote.activityEntries
             : local.activityEntries,
           weightLogs: remote.weightLogs.length ? remote.weightLogs : local.weightLogs,
+          waterEntries: remote.waterEntries.length ? remote.waterEntries : local.waterEntries,
+          vitaminEntries: remote.vitaminEntries.length ? remote.vitaminEntries : local.vitaminEntries,
           favorites: remoteFavs.length ? remoteFavs : local.favorites,
           favoriteItems: favoriteItems.length ? favoriteItems : local.favoriteItems,
           recentFoods: local.recentFoods,
@@ -221,21 +243,22 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   const completeOnboarding = useCallback(
     async (profile: Profile) => {
+      const readyProfile = withProfileDefaults(profile)
       const weight: WeightLog = {
         id: nid(),
         date: todayIso(),
-        weight: profile.weightKg,
+        weight: readyProfile.weightKg,
         createdAt: new Date().toISOString(),
       }
       const next: AppSnapshot = {
         ...snapshot,
-        profile,
+        profile: readyProfile,
         weightLogs: [...snapshot.weightLogs, weight],
       }
       commit(next)
       await runCloud(async () => {
         if (!user) return
-        await upsertProfile(user.id, profile)
+        await upsertProfile(user.id, readyProfile)
         await insertWeight(user.id, weight)
       })
     },
@@ -245,7 +268,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const updateProfile = useCallback(
     async (patch: Partial<Profile>) => {
       if (!snapshot.profile) return
-      const profile = { ...snapshot.profile, ...patch }
+      const profile = withProfileDefaults({ ...snapshot.profile, ...patch })
       commit({ ...snapshot, profile })
       await runCloud(async () => {
         if (!user) return
@@ -437,6 +460,64 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     })
   }, [snapshot, date, commit, runCloud, user])
 
+  const addWater = useCallback(
+    async (ml: number) => {
+      if (ml <= 0) return
+      const entry: WaterEntry = {
+        id: nid(),
+        date,
+        ml,
+        createdAt: new Date().toISOString(),
+      }
+      commit({ ...snapshot, waterEntries: [...snapshot.waterEntries, entry] })
+      await runCloud(async () => {
+        if (!user) return
+        await insertWater(user.id, entry)
+      })
+    },
+    [snapshot, date, commit, runCloud, user],
+  )
+
+  const removeWater = useCallback(
+    async (id: string) => {
+      commit({
+        ...snapshot,
+        waterEntries: snapshot.waterEntries.filter((e) => e.id !== id),
+      })
+      await runCloud(async () => {
+        if (!user) return
+        await deleteWaterRow(user.id, id)
+      })
+    },
+    [snapshot, commit, runCloud, user],
+  )
+
+  const toggleVitamin = useCallback(async () => {
+    const existing = snapshot.vitaminEntries.find((v) => v.date === date)
+    if (existing) {
+      commit({
+        ...snapshot,
+        vitaminEntries: snapshot.vitaminEntries.filter((v) => v.id !== existing.id),
+      })
+      await runCloud(async () => {
+        if (!user) return
+        await deleteVitaminRow(user.id, existing.id)
+      })
+      return
+    }
+    const entry: VitaminEntry = {
+      id: nid(),
+      date,
+      name: snapshot.profile?.vitaminName ?? 'Комплекс витаминов',
+      createdAt: new Date().toISOString(),
+    }
+    commit({ ...snapshot, vitaminEntries: [...snapshot.vitaminEntries, entry] })
+    await runCloud(async () => {
+      if (!user) return
+      await insertVitamin(user.id, entry)
+    })
+  }, [snapshot, date, commit, runCloud, user])
+
   const value = useMemo<Store>(
     () => ({
       ready,
@@ -466,6 +547,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       removeWeight,
       toggleFavorite,
       copyYesterday,
+      addWater,
+      removeWater,
+      toggleVitamin,
     }),
     [
       ready,
@@ -491,6 +575,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       removeWeight,
       toggleFavorite,
       copyYesterday,
+      addWater,
+      removeWater,
+      toggleVitamin,
     ],
   )
 

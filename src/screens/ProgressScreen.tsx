@@ -11,10 +11,11 @@ import {
 import { useStore } from '../lib/store'
 import { bmi, weeksToGoal } from '../lib/nutrition'
 import { formatLongDate } from '../lib/dates'
+import { weekReport } from '../lib/weekly'
 import { Sheet } from '../components/ui'
 
 export function ProgressScreen() {
-  const { snapshot, setOverlay, removeWeight } = useStore()
+  const { snapshot, setOverlay, removeWeight, date } = useStore()
   const profile = snapshot.profile
   const logs = useMemo(
     () => [...snapshot.weightLogs].sort((a, b) => a.date.localeCompare(b.date)),
@@ -35,6 +36,14 @@ export function ProgressScreen() {
   const delta7 = deltaSince(logs, 7, last)
   const delta30 = deltaSince(logs, 30, last)
   const weeks = weeksToGoal({ ...profile, weightKg: last })
+  const week = weekReport(
+    profile,
+    date,
+    snapshot.foodEntries,
+    snapshot.activityEntries,
+    snapshot.weightLogs,
+    snapshot.waterEntries,
+  )
 
   return (
     <div className="space-y-4 pb-6">
@@ -56,6 +65,29 @@ export function ProgressScreen() {
           label="До цели"
           value={weeks == null ? '—' : weeks === 0 ? 'уже там' : `~${weeks} нед.`}
         />
+      </section>
+
+      <section className="rounded-3xl bg-card p-4">
+        <h2 className="font-bold">Неделя</h2>
+        <p className="mt-1 text-xs text-white/40">
+          {week.loggedDays ? `По ${week.loggedDays} дням с едой в дневнике` : 'Пока мало записей — появится само'}
+        </p>
+        <div className="mt-3 grid grid-cols-2 gap-2">
+          <Mini k="Средний дефицит" v={week.loggedDays ? `${week.avgDeficit} ккал` : '—'} />
+          <Mini
+            k="Белок / день"
+            v={week.loggedDays ? `${week.avgProtein} / ${week.proteinNeed} г` : '—'}
+          />
+          <Mini
+            k="Вес за 7 дней"
+            v={
+              week.weightDelta == null
+                ? 'мало взвешиваний'
+                : `${week.weightDelta > 0 ? '+' : ''}${week.weightDelta} кг`
+            }
+          />
+          <Mini k="Вода / день" v={week.loggedDays ? `${week.avgWater} мл` : '—'} />
+        </div>
       </section>
 
       <section className="rounded-3xl bg-card p-4">
@@ -160,6 +192,15 @@ export function WeightSheet() {
         Сохранить
       </button>
     </Sheet>
+  )
+}
+
+function Mini({ k, v }: { k: string; v: string }) {
+  return (
+    <div className="rounded-2xl bg-white/5 px-3 py-2">
+      <div className="text-[11px] text-white/40">{k}</div>
+      <div className="font-bold">{v}</div>
+    </div>
   )
 }
 

@@ -67,6 +67,32 @@ export type Profile = {
   calorieGoal: number | null
   deficit: number
   onboardingComplete: boolean
+  tipsEnabled: boolean
+  waterGoalMl: number
+  tracksVitamins: boolean
+  vitaminName: string
+}
+
+export type WaterEntry = {
+  id: string
+  date: string
+  ml: number
+  createdAt: string
+}
+
+export type VitaminEntry = {
+  id: string
+  date: string
+  name: string
+  createdAt: string
+}
+
+export type HealthTip = {
+  id: string
+  title: string
+  why: string
+  fact: string
+  tone: 'info' | 'warn' | 'good'
 }
 
 export type ActivityTemplate = {
@@ -83,6 +109,8 @@ export type AppSnapshot = {
   foodEntries: FoodEntry[]
   activityEntries: ActivityEntry[]
   weightLogs: WeightLog[]
+  waterEntries: WaterEntry[]
+  vitaminEntries: VitaminEntry[]
   favorites: string[]
   favoriteItems: FoodItem[]
   recentFoods: FoodItem[]

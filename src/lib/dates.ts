@@ -26,3 +26,7 @@ export function formatWeekday(iso: string): string {
 export function nid(): string {
   return crypto.randomUUID()
 }
+
+export function lastNDates(endIso: string, n: number): string[] {
+  return Array.from({ length: n }, (_, i) => shiftIso(endIso, i - (n - 1)))
+}

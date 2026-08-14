@@ -8,8 +8,11 @@ import type {
   MealType,
   Profile,
   Sex,
+  VitaminEntry,
+  WaterEntry,
   WeightLog,
 } from '../types'
+import { withProfileDefaults } from './nutrition'
 
 export const supabaseUrl = import.meta.env.VITE_SUPABASE_URL ?? ''
 export const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY ?? ''
@@ -30,6 +33,10 @@ type ProfileRow = {
   calorie_goal: number | null
   deficit: number
   onboarding_complete: boolean
+  tips_enabled?: boolean
+  water_goal_ml?: number | null
+  tracks_vitamins?: boolean
+  vitamin_name?: string | null
 }
 
 type FoodRow = {
@@ -73,7 +80,7 @@ type FavRow = {
 }
 
 export function profileFromRow(row: ProfileRow): Profile {
-  return {
+  return withProfileDefaults({
     name: row.name,
     sex: row.sex,
     age: row.age,
@@ -83,7 +90,11 @@ export function profileFromRow(row: ProfileRow): Profile {
     calorieGoal: row.calorie_goal,
     deficit: row.deficit,
     onboardingComplete: row.onboarding_complete,
-  }
+    tipsEnabled: row.tips_enabled ?? true,
+    waterGoalMl: Number(row.water_goal_ml ?? 0),
+    tracksVitamins: row.tracks_vitamins ?? true,
+    vitaminName: row.vitamin_name ?? 'Комплекс витаминов',
+  })
 }
 
 export function foodFromRow(row: FoodRow): FoodEntry {
@@ -108,12 +119,14 @@ export function foodFromRow(row: FoodRow): FoodEntry {
 
 export async function fetchSnapshot(userId: string): Promise<AppSnapshot | null> {
   if (!supabase) return null
-  const [profileRes, foodRes, actRes, weightRes, favRes] = await Promise.all([
+  const [profileRes, foodRes, actRes, weightRes, favRes, waterRes, vitRes] = await Promise.all([
     supabase.from('profiles').select('*').eq('id', userId).maybeSingle(),
     supabase.from('food_entries').select('*').eq('user_id', userId).order('created_at'),
     supabase.from('activity_entries').select('*').eq('user_id', userId).order('created_at'),
     supabase.from('weight_logs').select('*').eq('user_id', userId).order('logged_on'),
     supabase.from('favorite_foods').select('food_key').eq('user_id', userId),
+    supabase.from('water_entries').select('*').eq('user_id', userId).order('created_at'),
+    supabase.from('vitamin_entries').select('*').eq('user_id', userId).order('created_at'),
   ])
 
   const profile = profileRes.data ? profileFromRow(profileRes.data as ProfileRow) : null
@@ -136,6 +149,26 @@ export async function fetchSnapshot(userId: string): Promise<AppSnapshot | null>
       weight: Number(row.weight),
       createdAt: row.created_at,
     })),
+    waterEntries: waterRes.error
+      ? []
+      : ((waterRes.data ?? []) as { id: string; logged_on: string; ml: number; created_at: string }[]).map(
+          (row) => ({
+            id: row.id,
+            date: row.logged_on,
+            ml: Number(row.ml),
+            createdAt: row.created_at,
+          }),
+        ),
+    vitaminEntries: vitRes.error
+      ? []
+      : ((vitRes.data ?? []) as { id: string; logged_on: string; name: string; created_at: string }[]).map(
+          (row) => ({
+            id: row.id,
+            date: row.logged_on,
+            name: row.name,
+            createdAt: row.created_at,
+          }),
+        ),
     favorites: ((favRes.data ?? []) as FavRow[]).map((r) => r.food_key),
     favoriteItems: [],
     recentFoods: [],
@@ -158,6 +191,15 @@ export async function upsertProfile(userId: string, profile: Profile) {
     updated_at: new Date().toISOString(),
   })
   if (error) throw error
+  await supabase
+    .from('profiles')
+    .update({
+      tips_enabled: profile.tipsEnabled,
+      water_goal_ml: profile.waterGoalMl,
+      tracks_vitamins: profile.tracksVitamins,
+      vitamin_name: profile.vitaminName,
+    })
+    .eq('id', userId)
 }
 
 export async function insertFood(userId: string, entry: FoodEntry) {
@@ -245,4 +287,40 @@ export async function setFavorite(userId: string, foodKey: string, on: boolean) 
       .eq('food_key', foodKey)
     if (error) throw error
   }
+}
+
+export async function insertWater(userId: string, entry: WaterEntry) {
+  if (!supabase) return
+  const { error } = await supabase.from('water_entries').insert({
+    id: entry.id,
+    user_id: userId,
+    logged_on: entry.date,
+    ml: entry.ml,
+    created_at: entry.createdAt,
+  })
+  if (error) throw error
+}
+
+export async function deleteWaterRow(userId: string, id: string) {
+  if (!supabase) return
+  const { error } = await supabase.from('water_entries').delete().eq('id', id).eq('user_id', userId)
+  if (error) throw error
+}
+
+export async function insertVitamin(userId: string, entry: VitaminEntry) {
+  if (!supabase) return
+  const { error } = await supabase.from('vitamin_entries').insert({
+    id: entry.id,
+    user_id: userId,
+    logged_on: entry.date,
+    name: entry.name,
+    created_at: entry.createdAt,
+  })
+  if (error) throw error
+}
+
+export async function deleteVitaminRow(userId: string, id: string) {
+  if (!supabase) return
+  const { error } = await supabase.from('vitamin_entries').delete().eq('id', id).eq('user_id', userId)
+  if (error) throw error
 }

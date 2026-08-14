@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Search, Star, PencilLine } from 'lucide-react'
+import { Search, Star, PencilLine, ScanLine } from 'lucide-react'
 import { searchLocal } from '../lib/search'
 import { searchOpenFoodFacts } from '../lib/off'
 import { useStore } from '../lib/store'
@@ -101,6 +101,14 @@ export function FoodSearch() {
           placeholder="Крупа, грудка, яблоко..."
           className="h-full w-full bg-transparent text-base outline-none placeholder:text-white/30"
         />
+        <button
+          type="button"
+          onClick={() => setOverlay({ type: 'barcode', meal })}
+          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-white/8"
+          aria-label="Штрихкод"
+        >
+          <ScanLine size={18} />
+        </button>
       </label>
 
       {!q && (favs.length > 0 || recents.length > 0) && (

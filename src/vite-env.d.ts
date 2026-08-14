@@ -6,6 +6,14 @@ interface ImportMetaEnv {
   readonly VITE_SUPABASE_ANON_KEY: string
 }
 
-interface ImportMeta {
-  readonly env: ImportMetaEnv
+interface BarcodeDetector {
+  detect(image: ImageBitmapSource): Promise<Array<{ rawValue: string }>>
+}
+
+interface BarcodeDetectorConstructor {
+  new (options?: { formats?: string[] }): BarcodeDetector
+}
+
+interface Window {
+  BarcodeDetector?: BarcodeDetectorConstructor
 }

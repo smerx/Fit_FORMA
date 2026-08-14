@@ -1,4 +1,5 @@
 import { ChevronLeft, ChevronRight, Settings } from 'lucide-react'
+import { useState } from 'react'
 import { useStore } from '../lib/store'
 import { formatDayTitle, shiftIso, todayIso } from '../lib/dates'
 import {
@@ -7,23 +8,41 @@ import {
   sumActivity,
   sumFood,
 } from '../lib/nutrition'
+import { pickHealthTip } from '../lib/tips'
 import { MEALS } from '../lib/labels'
 import { CalorieRing, MacroBar } from '../components/CalorieRing'
 import { FoodThumb } from '../components/ui'
+import { TipCard, TipSheet, useDismissedTips } from '../components/TipCard'
 import type { FoodItem } from '../types'
 
 export function TodayScreen() {
-  const { snapshot, date, setDate, setOverlay, setTab } = useStore()
+  const { snapshot, date, setDate, setOverlay, setTab, addWater, removeWater, toggleVitamin, updateProfile } =
+    useStore()
   const profile = snapshot.profile
+  const dismissed = useDismissedTips(date)
+  const [tipOpen, setTipOpen] = useState(false)
   if (!profile) return null
 
   const foods = snapshot.foodEntries.filter((e) => e.date === date)
   const acts = snapshot.activityEntries.filter((e) => e.date === date)
+  const waters = snapshot.waterEntries.filter((e) => e.date === date)
+  const vitamins = snapshot.vitaminEntries.filter((e) => e.date === date)
+  const waterMl = waters.reduce((s, w) => s + w.ml, 0)
   const eaten = sumFood(foods)
   const burned = sumActivity(acts)
   const target = dailyCalorieTarget(profile)
   const left = remainingCalories(profile, foods, acts)
   const lastWeight = [...snapshot.weightLogs].sort((a, b) => a.date.localeCompare(b.date)).at(-1)
+  const tip = pickHealthTip({
+    profile,
+    date,
+    foods,
+    activities: acts,
+    waterMl,
+    vitamins,
+    dismissed: dismissed.ids,
+  })
+  const waterPct = Math.min(100, Math.round((waterMl / Math.max(profile.waterGoalMl, 1)) * 100))
 
   return (
     <div className="space-y-4 pb-6">
@@ -78,6 +97,61 @@ export function TodayScreen() {
           <MacroBar label="Углеводы" value={eaten.carbs} color="#ff7a9c" />
         </div>
       </section>
+
+      {tip && (
+        <TipCard tip={tip} onOpen={() => setTipOpen(true)} onDismiss={() => dismissed.dismiss(tip.id)} />
+      )}
+
+      <section className="rounded-3xl bg-card px-4 py-3">
+        <div className="flex items-center justify-between">
+          <div>
+            <div className="text-xs text-white/40">Вода</div>
+            <div className="text-xl font-extrabold tabular-nums">
+              {waterMl} <span className="text-sm font-semibold text-white/40">/ {profile.waterGoalMl} мл</span>
+            </div>
+          </div>
+          {waters.length > 0 && (
+            <button onClick={() => removeWater(waters.at(-1)!.id)} className="text-xs text-white/35">
+              − последний
+            </button>
+          )}
+        </div>
+        <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/8">
+          <div className="h-full rounded-full bg-protein" style={{ width: `${waterPct}%` }} />
+        </div>
+        <div className="mt-3 flex gap-2">
+          {[250, 350, 500].map((ml) => (
+            <button
+              key={ml}
+              onClick={() => addWater(ml)}
+              className="h-11 flex-1 rounded-2xl bg-white/8 text-sm font-semibold"
+            >
+              +{ml}
+            </button>
+          ))}
+        </div>
+      </section>
+
+      {profile.tracksVitamins && (
+        <button
+          onClick={() => toggleVitamin()}
+          className="flex w-full items-center justify-between rounded-3xl bg-card px-4 py-4 text-left"
+        >
+          <div>
+            <div className="font-semibold">{profile.vitaminName}</div>
+            <div className="text-sm text-white/40">
+              {vitamins.length ? 'Сегодня отмечен' : 'Нажми, если принял'}
+            </div>
+          </div>
+          <span
+            className={`flex h-8 w-8 items-center justify-center rounded-full text-sm font-bold ${
+              vitamins.length ? 'bg-mint text-bg' : 'bg-white/8 text-white/40'
+            }`}
+          >
+            {vitamins.length ? '✓' : ''}
+          </span>
+        </button>
+      )}
 
       <button
         onClick={() => setOverlay({ type: 'weight' })}
@@ -149,6 +223,16 @@ export function TodayScreen() {
           {acts.length ? acts.map((a) => `${a.name} ${a.minutes} мин`).join(' · ') : 'Покос, эллипсоид, работа...'}
         </p>
       </button>
+      {tipOpen && tip && (
+        <TipSheet
+          tip={tip}
+          onClose={() => setTipOpen(false)}
+          onDisable={() => {
+            void updateProfile({ tipsEnabled: false })
+            setTipOpen(false)
+          }}
+        />
+      )}
     </div>
   )
 }

@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import { useStore } from '../lib/store'
-import { bmr, dailyCalorieTarget } from '../lib/nutrition'
+import { bmr, dailyCalorieTarget, withProfileDefaults } from '../lib/nutrition'
 import { Sheet } from '../components/ui'
 import type { Profile, Sex } from '../types'
 
@@ -10,7 +10,7 @@ export function ProfileSheet() {
   const [draft, setDraft] = useState<Profile | null>(profile)
 
   useEffect(() => {
-    if (overlay.type === 'profile' && snapshot.profile) setDraft(snapshot.profile)
+    if (overlay.type === 'profile' && snapshot.profile) setDraft(withProfileDefaults(snapshot.profile))
   }, [overlay.type, snapshot.profile])
 
   if (overlay.type !== 'profile' || !profile || !draft) return null
@@ -51,6 +51,34 @@ export function ProfileSheet() {
             label="Ккал в день"
             value={draft.calorieGoal}
             onChange={(calorieGoal) => setDraft({ ...draft, calorieGoal })}
+          />
+        )}
+        <Num
+          label="Цель по воде, мл"
+          value={draft.waterGoalMl}
+          onChange={(waterGoalMl) => setDraft({ ...draft, waterGoalMl })}
+        />
+        <label className="flex items-center justify-between rounded-2xl bg-white/5 px-3 py-3">
+          <span className="text-sm">Советы и факты</span>
+          <input
+            type="checkbox"
+            checked={draft.tipsEnabled}
+            onChange={(e) => setDraft({ ...draft, tipsEnabled: e.target.checked })}
+          />
+        </label>
+        <label className="flex items-center justify-between rounded-2xl bg-white/5 px-3 py-3">
+          <span className="text-sm">Отмечать витамины</span>
+          <input
+            type="checkbox"
+            checked={draft.tracksVitamins}
+            onChange={(e) => setDraft({ ...draft, tracksVitamins: e.target.checked })}
+          />
+        </label>
+        {draft.tracksVitamins && (
+          <Field
+            label="Название комплекса"
+            value={draft.vitaminName}
+            onChange={(vitaminName) => setDraft({ ...draft, vitaminName })}
           />
         )}
         <button
@@ -94,6 +122,10 @@ export function Onboarding() {
       calorieGoal: null,
       deficit: 500,
       onboardingComplete: true,
+      tipsEnabled: true,
+      waterGoalMl: 0,
+      tracksVitamins: true,
+      vitaminName: 'Комплекс витаминов',
     })
 
   return (

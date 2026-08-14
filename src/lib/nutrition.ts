@@ -69,3 +69,28 @@ export function weeksToGoal(profile: Profile): number | null {
   if (kgPerWeek <= 0) return null
   return Math.max(1, Math.ceil(Math.abs(delta) / kgPerWeek))
 }
+
+export function proteinTargetG(profile: Profile): number {
+  return Math.round(1.6 * profile.weightKg)
+}
+
+export function fatFloorG(profile: Profile): number {
+  return Math.max(40, Math.round(0.8 * profile.weightKg))
+}
+
+export function defaultWaterGoalMl(weightKg: number): number {
+  return Math.min(3500, Math.max(1800, Math.round(weightKg * 35)))
+}
+
+export function withProfileDefaults(profile: Profile): Profile {
+  return {
+    ...profile,
+    tipsEnabled: profile.tipsEnabled ?? true,
+    waterGoalMl:
+      profile.waterGoalMl && profile.waterGoalMl > 0
+        ? profile.waterGoalMl
+        : defaultWaterGoalMl(profile.weightKg),
+    tracksVitamins: profile.tracksVitamins ?? true,
+    vitaminName: profile.vitaminName?.trim() || 'Комплекс витаминов',
+  }
+}

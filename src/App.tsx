@@ -4,6 +4,7 @@ import { AppShell } from './components/AppShell'
 import { FoodSearch } from './components/FoodSearch'
 import { GramSheet } from './components/GramSheet'
 import { CustomFoodSheet } from './components/CustomFoodSheet'
+import { BarcodeSheet } from './components/BarcodeSheet'
 import { TodayScreen } from './screens/TodayScreen'
 import { DiaryScreen } from './screens/DiaryScreen'
 import { ActivityScreen } from './screens/ActivityScreen'
@@ -52,6 +53,7 @@ export default function App() {
       {overlay.type === 'search' && <FoodSearch />}
       {overlay.type === 'grams' && <GramSheet />}
       {overlay.type === 'custom-food' && <CustomFoodSheet />}
+      {overlay.type === 'barcode' && <BarcodeSheet />}
       <WeightSheet />
       <ProfileSheet />
     </AppShell>

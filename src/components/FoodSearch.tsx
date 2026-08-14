@@ -5,6 +5,7 @@ import { searchOpenFoodFacts } from '../lib/off'
 import { useStore } from '../lib/store'
 import type { FoodItem, MealType } from '../types'
 import { MEALS } from '../lib/labels'
+import { portionUnit } from '../lib/portions'
 import { FoodThumb, FormBadge, Sheet } from './ui'
 
 function ResultRow({
@@ -26,7 +27,9 @@ function ResultRow({
           <div className="truncate font-semibold">{food.name}</div>
           <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-xs text-white/50">
             <FormBadge form={food.form} />
-            <span>{Math.round(food.kcal)} ккал / 100 г</span>
+            <span>
+              {Math.round(food.kcal)} ккал / 100 {portionUnit(food)}
+            </span>
           </div>
         </div>
       </button>

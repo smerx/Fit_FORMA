@@ -1,25 +1,23 @@
 import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
+import { getISODay, parseISO } from 'date-fns'
 import { ChevronLeft, ChevronRight, Copy, GripVertical, Plus, Trash2 } from 'lucide-react'
 import { formatDayTitle, formatWeekday, shiftIso, todayIso } from '../lib/dates'
 import {
+  dayRows,
   expectedInDays,
-  isRegularOn,
-  lessonOn,
   packEntriesForPayment,
   payHint,
   paymentText,
   remainingInPack,
-  rosterIds,
   rub,
   scheduleLabel,
-  timeOn,
 } from './money'
 import { defaultStudentDraft, useTutors } from './store'
-import type { TutorEventKind, TutorStudent } from './types'
+import type { LessonStatus, TutorEvent, TutorEventKind, TutorStudent } from './types'
 import { EVENT_KIND_LABEL, PAY_KIND_LABEL, WEEKDAYS } from './types'
 
 type Tab = 'day' | 'list' | 'money'
-type Edit = { mode: 'new' } | { mode: 'edit'; id: string } | null
+type Edit = { mode: 'new' } | { mode: 'edit'; id: string } | { mode: 'from-trial'; eventId: string } | null
 
 export function TutorsApp() {
   const [tab, setTab] = useState<Tab>('day')
@@ -38,7 +36,9 @@ export function TutorsApp() {
           Прогноз
         </TabBtn>
       </div>
-      {tab === 'day' && <DayPane />}
+      {tab === 'day' && (
+        <DayPane onConvertTrial={(eventId) => setEdit({ mode: 'from-trial', eventId })} />
+      )}
       {tab === 'list' && <ListPane onNew={() => setEdit({ mode: 'new' })} onOpen={(id) => setEdit({ mode: 'edit', id })} />}
       {tab === 'money' && <MoneyPane />}
     </div>
@@ -56,20 +56,34 @@ function TabBtn({ on, onClick, children }: { on: boolean; onClick: () => void; c
   )
 }
 
-function DayPane() {
+function DayPane({ onConvertTrial }: { onConvertTrial: (eventId: string) => void }) {
   const { students, lessons, events, setLesson, removeEvent } = useTutors()
   const [date, setDate] = useState(todayIso)
   const [pick, setPick] = useState(false)
-  const [eventOpen, setEventOpen] = useState(false)
+  const [pickTime, setPickTime] = useState('16:00')
+  const [eventEdit, setEventEdit] = useState<null | { id?: string }>(null)
   const today = todayIso()
-  const ids = rosterIds(students, lessons, date)
-  const rows = ids
-    .map((id) => students.find((s) => s.id === id))
-    .filter((s): s is TutorStudent => Boolean(s))
-    .sort((a, b) => timeOn(a, date).localeCompare(timeOn(b, date)) || a.name.localeCompare(b.name, 'ru'))
-  const extras = students.filter((s) => s.active && !ids.includes(s.id))
+  const rows = dayRows(students, lessons, date)
   const dayEvents = events.filter((e) => e.date === date)
-  if (eventOpen) return <EventSheet date={date} onClose={() => setEventOpen(false)} />
+  if (eventEdit) {
+    return (
+      <EventSheet
+        date={date}
+        existing={eventEdit.id ? events.find((e) => e.id === eventEdit.id) : undefined}
+        onClose={() => setEventEdit(null)}
+      />
+    )
+  }
+
+  function mark(row: (typeof rows)[number], status: LessonStatus | null) {
+    void setLesson({
+      id: row.rec?.id,
+      studentId: row.student.id,
+      date,
+      timeHm: row.timeHm,
+      status,
+    })
+  }
 
   return (
     <div className="space-y-4">
@@ -93,72 +107,62 @@ function DayPane() {
         )}
       </header>
       <p className="text-sm text-white/45">
-        Пропуск — занятие оплачивают, в шаблоне будет (п.б.ув.пр). Отмена — нет. Перенос: «на этот день».
+        Пропуск — занятие оплачивают, в шаблоне будет (п.б.ув.пр). Отмена — нет. Перенос: «на этот день», можно несколько
+        раз одного и того же.
       </p>
       {dayEvents.length > 0 && (
         <div className="space-y-2">
-          {dayEvents.map((e) => {
-            const s = students.find((x) => x.id === e.studentId)
-            return (
-              <div key={e.id} className="flex items-center justify-between gap-2 rounded-3xl bg-mint/15 px-4 py-3">
-                <div className="min-w-0">
-                  <div className="text-sm font-semibold">{EVENT_KIND_LABEL[e.kind]}</div>
-                  <div className="text-xs text-white/50">
-                    {s?.name ?? 'ученик'} · {rub(e.amountRub)}
-                  </div>
-                </div>
-                <button onClick={() => void removeEvent(e.id)} className="text-xs text-white/35">
-                  убрать
-                </button>
-              </div>
-            )
-          })}
+          {dayEvents.map((e) => (
+            <EventCard
+              key={e.id}
+              event={e}
+              students={students}
+              onRemove={() => void removeEvent(e.id)}
+              onOpen={() => {
+                if (e.kind === 'trial') onConvertTrial(e.id)
+                else if (e.kind === 'note') setEventEdit({ id: e.id })
+              }}
+            />
+          ))}
         </div>
       )}
-      {rows.length === 0 && <p className="text-sm text-white/30">На этот день никого. Можно добавить перенос.</p>}
+      {rows.length === 0 && dayEvents.length === 0 && (
+        <p className="text-sm text-white/30">На этот день никого. Можно добавить перенос или пробное.</p>
+      )}
       <div className="space-y-2">
-        {rows.map((s) => {
-          const rec = lessonOn(lessons, s.id, date)
-          const regular = isRegularOn(s, date)
+        {rows.map((row) => {
+          const rec = row.rec
+          const held = rec?.status === 'held' || rec?.status === 'extra'
           return (
-            <div key={s.id} className="rounded-3xl bg-card px-3 py-3">
+            <div key={row.key} className="rounded-3xl bg-card px-3 py-3">
               <div className="flex items-baseline justify-between gap-2">
                 <div className="min-w-0">
-                  <div className="font-semibold">{s.name}</div>
+                  <div className="font-semibold">{row.student.name}</div>
                   <div className="text-[11px] text-white/40">
-                    {timeOn(s, date)} · {PAY_KIND_LABEL[s.payKind]}
-                    {regular ? '' : ' · перенос'}
+                    {row.timeHm} · {PAY_KIND_LABEL[row.student.payKind]}
+                    {row.kind === 'extra' ? ' · перенос' : ''}
                   </div>
                 </div>
               </div>
               <div className="mt-2 grid grid-cols-3 gap-1">
                 <Mark
-                  on={rec?.status === 'held' || rec?.status === 'extra'}
+                  on={held}
                   label="Пришёл"
-                  onClick={() =>
-                    void setLesson(
-                      s.id,
-                      date,
-                      rec?.status === 'held' || rec?.status === 'extra' ? null : regular ? 'held' : 'extra',
-                    )
-                  }
+                  onClick={() => mark(row, held ? null : row.kind === 'extra' ? 'extra' : 'held')}
                 />
                 <Mark
                   on={rec?.status === 'skipped'}
                   label="Пропуск"
-                  onClick={() => void setLesson(s.id, date, rec?.status === 'skipped' ? null : 'skipped')}
+                  onClick={() => mark(row, rec?.status === 'skipped' ? null : 'skipped')}
                 />
                 <Mark
                   on={rec?.status === 'cancelled'}
                   label="Отмена"
-                  onClick={() => void setLesson(s.id, date, rec?.status === 'cancelled' ? null : 'cancelled')}
+                  onClick={() => mark(row, rec?.status === 'cancelled' ? null : 'cancelled')}
                 />
               </div>
-              {!regular && (
-                <button
-                  onClick={() => void setLesson(s.id, date, null)}
-                  className="mt-2 text-xs text-white/35"
-                >
+              {row.kind === 'extra' && (
+                <button onClick={() => mark(row, null)} className="mt-2 text-xs text-white/35">
                   убрать с этого дня
                 </button>
               )}
@@ -174,7 +178,7 @@ function DayPane() {
           На этот день
         </button>
         <button
-          onClick={() => setEventOpen(true)}
+          onClick={() => setEventEdit({})}
           className="flex h-12 w-12 items-center justify-center rounded-2xl bg-mint text-bg"
         >
           <Plus size={20} />
@@ -182,21 +186,74 @@ function DayPane() {
       </div>
       {pick && (
         <div className="space-y-2">
-          {extras.length === 0 && <p className="text-sm text-white/30">Больше некого добавить</p>}
-          {extras.map((s) => (
-            <button
-              key={s.id}
-              onClick={() => {
-                void setLesson(s.id, date, 'extra')
-                setPick(false)
-              }}
-              className="flex h-12 w-full items-center rounded-2xl bg-card px-4 text-left font-medium"
-            >
-              {s.name}
-            </button>
-          ))}
+          <label className="block">
+            <span className="mb-1 block text-xs text-white/45">Время переноса</span>
+            <input
+              type="time"
+              value={pickTime}
+              onChange={(e) => setPickTime(e.target.value)}
+              className="h-12 w-full rounded-2xl bg-white/8 px-3 outline-none"
+            />
+          </label>
+          {students.filter((s) => s.active).length === 0 && (
+            <p className="text-sm text-white/30">Сначала добавь ученика</p>
+          )}
+          {students
+            .filter((s) => s.active)
+            .map((s) => (
+              <button
+                key={s.id}
+                onClick={() => {
+                  void setLesson({
+                    studentId: s.id,
+                    date,
+                    timeHm: pickTime,
+                    status: 'extra',
+                  })
+                }}
+                className="flex h-12 w-full items-center rounded-2xl bg-card px-4 text-left font-medium"
+              >
+                {s.name}
+              </button>
+            ))}
         </div>
       )}
+    </div>
+  )
+}
+
+function EventCard({
+  event,
+  students,
+  onRemove,
+  onOpen,
+}: {
+  event: TutorEvent
+  students: TutorStudent[]
+  onRemove: () => void
+  onOpen: () => void
+}) {
+  const s = event.studentId ? students.find((x) => x.id === event.studentId) : undefined
+  const clickable = event.kind === 'trial' || event.kind === 'note'
+  const sub =
+    event.kind === 'payment'
+      ? `${s?.name ?? 'ученик'} · ${rub(event.amountRub)}`
+      : event.kind === 'trial'
+        ? `${event.title || 'без имени'} · ${event.timeHm ?? ''}`
+        : event.title || 'без текста'
+  return (
+    <div className="flex items-center justify-between gap-2 rounded-3xl bg-mint/15 px-4 py-3">
+      <button
+        onClick={clickable ? onOpen : undefined}
+        className={`min-w-0 flex-1 text-left ${clickable ? '' : 'cursor-default'}`}
+      >
+        <div className="text-sm font-semibold">{EVENT_KIND_LABEL[event.kind]}</div>
+        <div className="text-xs text-white/50">{sub}</div>
+        {event.kind === 'trial' && <div className="mt-1 text-[11px] text-mint">нажми — сделать учеником</div>}
+      </button>
+      <button onClick={onRemove} className="text-xs text-white/35">
+        убрать
+      </button>
     </div>
   )
 }
@@ -212,16 +269,29 @@ function Mark({ on, label, onClick }: { on: boolean; onClick: () => void; label:
   )
 }
 
-function EventSheet({ date, onClose }: { date: string; onClose: () => void }) {
+function EventSheet({
+  date,
+  existing,
+  onClose,
+}: {
+  date: string
+  existing?: TutorEvent
+  onClose: () => void
+}) {
   const { students, saveEvent } = useTutors()
   const active = students
     .filter((s) => s.active)
     .slice()
     .sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0) || a.name.localeCompare(b.name, 'ru'))
-  const [kind] = useState<TutorEventKind>('payment')
-  const [studentId, setStudentId] = useState(active[0]?.id ?? '')
+  const [kind, setKind] = useState<TutorEventKind>(existing?.kind ?? 'payment')
+  const [studentId, setStudentId] = useState(existing?.studentId ?? active[0]?.id ?? '')
   const selected = students.find((s) => s.id === studentId)
-  const [amount, setAmount] = useState(selected?.priceRub ?? 0)
+  const [amount, setAmount] = useState(existing?.amountRub || selected?.priceRub || 0)
+  const [title, setTitle] = useState(existing?.title ?? '')
+  const [timeHm, setTimeHm] = useState(existing?.timeHm ?? '16:00')
+
+  const canSave =
+    kind === 'payment' ? Boolean(studentId) : kind === 'trial' ? Boolean(title.trim() && timeHm) : Boolean(title.trim())
 
   return (
     <div className="space-y-3 pb-8">
@@ -229,39 +299,86 @@ function EventSheet({ date, onClose }: { date: string; onClose: () => void }) {
         ← назад
       </button>
       <h2 className="text-xl font-extrabold">Событие</h2>
-      <p className="text-sm text-white/45">
-        Пока одно: оплата абонемента. Потом сюда же можно будет пробное, бонус, каникулы.
-      </p>
-      <div className="text-xs text-white/45">Тип</div>
-      <div className="h-11 rounded-xl bg-mint text-center text-sm font-semibold leading-[44px] text-bg">
-        {EVENT_KIND_LABEL[kind]}
-      </div>
-      <div className="text-xs text-white/45">За кого</div>
-      {active.length === 0 && <p className="text-sm text-white/30">Сначала добавь ученика во вкладке «Ученики»</p>}
-      <div className="space-y-2">
-        {active.map((s) => (
+      <div className="grid grid-cols-3 gap-1">
+        {(['payment', 'trial', 'note'] as const).map((k) => (
           <button
-            key={s.id}
-            onClick={() => {
-              setStudentId(s.id)
-              setAmount(s.priceRub)
-            }}
-            className={`flex h-12 w-full items-center rounded-2xl px-4 text-left font-medium ${
-              studentId === s.id ? 'bg-mint text-bg' : 'bg-card'
+            key={k}
+            onClick={() => setKind(k)}
+            className={`h-11 rounded-xl px-1 text-[11px] font-semibold ${
+              kind === k ? 'bg-mint text-bg' : 'bg-white/8'
             }`}
           >
-            {s.name}
+            {EVENT_KIND_LABEL[k]}
           </button>
         ))}
       </div>
-      <Num label="Сумма, ₽" value={amount} onChange={setAmount} />
-      <p className="text-[11px] text-white/35">
-        Это только факт оплаты. Абонемент считается по занятиям: если уже шли уроки нового пакета — они остаются.
-      </p>
+      {kind === 'payment' && (
+        <>
+          <div className="text-xs text-white/45">За кого</div>
+          {active.length === 0 && (
+            <p className="text-sm text-white/30">Сначала добавь ученика во вкладке «Ученики»</p>
+          )}
+          <div className="space-y-2">
+            {active.map((s) => (
+              <button
+                key={s.id}
+                onClick={() => {
+                  setStudentId(s.id)
+                  setAmount(s.priceRub)
+                }}
+                className={`flex h-12 w-full items-center rounded-2xl px-4 text-left font-medium ${
+                  studentId === s.id ? 'bg-mint text-bg' : 'bg-card'
+                }`}
+              >
+                {s.name}
+              </button>
+            ))}
+          </div>
+          <Num label="Сумма, ₽" value={amount} onChange={setAmount} />
+          <p className="text-[11px] text-white/35">
+            Это только факт оплаты. Абонемент считается по занятиям.
+          </p>
+        </>
+      )}
+      {kind === 'trial' && (
+        <>
+          <Field label="Имя" value={title} onChange={setTitle} />
+          <label className="block">
+            <span className="mb-1 block text-xs text-white/45">Время</span>
+            <input
+              type="time"
+              value={timeHm}
+              onChange={(e) => setTimeHm(e.target.value)}
+              className="h-12 w-full rounded-2xl bg-white/8 px-3 outline-none"
+            />
+          </label>
+          <p className="text-[11px] text-white/35">
+            Один раз в расписании. Потом нажми на карточку — откроется форма ученика с этими полями.
+          </p>
+        </>
+      )}
+      {kind === 'note' && (
+        <label className="block">
+          <span className="mb-1 block text-xs text-white/45">Текст</span>
+          <textarea
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            className="min-h-24 w-full rounded-2xl bg-white/8 p-3 text-sm outline-none"
+          />
+        </label>
+      )}
       <button
-        disabled={!studentId}
+        disabled={!canSave}
         onClick={async () => {
-          await saveEvent({ date, kind, studentId, amountRub: amount })
+          await saveEvent({
+            id: existing?.id,
+            date,
+            kind,
+            studentId: kind === 'payment' ? studentId : null,
+            amountRub: kind === 'payment' ? amount : 0,
+            title: kind === 'payment' ? '' : title.trim(),
+            timeHm: kind === 'trial' ? timeHm : null,
+          })
           onClose()
         }}
         className="h-14 w-full rounded-2xl bg-mint font-bold text-bg disabled:opacity-40"
@@ -447,10 +564,22 @@ function Forecast({ title, main, cautious }: { title: string; main: number; caut
 }
 
 function StudentForm({ edit, onClose }: { edit: Exclude<Edit, null>; onClose: () => void }) {
-  const { students, lessons, saveStudent, removeStudent, settings } = useTutors()
+  const { students, lessons, events, saveStudent, removeStudent, removeEvent, settings } = useTutors()
   const today = todayIso()
   const existing = edit.mode === 'edit' ? students.find((s) => s.id === edit.id) : undefined
-  const [draft, setDraft] = useState(() => existing ?? defaultStudentDraft(today))
+  const trial = edit.mode === 'from-trial' ? events.find((e) => e.id === edit.eventId) : undefined
+  const [draft, setDraft] = useState(() => {
+    if (existing) return existing
+    if (trial) {
+      const weekday = getISODay(parseISO(trial.date))
+      return defaultStudentDraft(today, {
+        name: trial.title,
+        timeHm: trial.timeHm ?? '16:00',
+        slots: [{ weekday, timeHm: trial.timeHm ?? '16:00' }],
+      })
+    }
+    return defaultStudentDraft(today)
+  })
   const [copied, setCopied] = useState(false)
   const dates = useMemo(
     () => (existing ? packEntriesForPayment(existing, lessons, today) : []),
@@ -508,7 +637,7 @@ function StudentForm({ edit, onClose }: { edit: Exclude<Edit, null>; onClose: ()
         />
         <Num label="Минуты" value={draft.durationMin} onChange={(durationMin) => setDraft({ ...draft, durationMin })} />
       </div>
-      <div className="text-xs text-white/45">Дни и время — у каждого дня своё</div>
+      <div className="text-xs text-white/45">Дни и время — можно два слота в один день</div>
       <p className="text-[11px] text-white/35">
         Смена расписания не трогает уже отмеченные занятия. Они остаются в абонементе.
       </p>
@@ -552,19 +681,23 @@ function StudentForm({ edit, onClose }: { edit: Exclude<Edit, null>; onClose: ()
           </div>
         ))}
       </div>
-      {draft.slots.length < 7 && (
+      {draft.slots.length < 14 && (
         <button
           onClick={() => {
-            const used = new Set(draft.slots.map((x) => x.weekday))
-            const next = WEEKDAYS.find((w) => !used.has(w.n))?.n ?? 1
             setDraft({
               ...draft,
-              slots: [...draft.slots, { weekday: next, timeHm: draft.slots.at(-1)?.timeHm ?? '16:00' }],
+              slots: [
+                ...draft.slots,
+                {
+                  weekday: draft.slots.at(-1)?.weekday ?? 1,
+                  timeHm: draft.slots.at(-1)?.timeHm ?? '16:00',
+                },
+              ],
             })
           }}
           className="h-11 w-full rounded-2xl bg-white/8 text-sm font-semibold"
         >
-          Ещё день
+          Ещё слот
         </button>
       )}
       {draft.payKind !== 'hourly' && (
@@ -594,6 +727,7 @@ function StudentForm({ edit, onClose }: { edit: Exclude<Edit, null>; onClose: ()
         disabled={!draft.name.trim() || !draft.slots.length}
         onClick={async () => {
           await saveStudent(edit.mode === 'edit' ? { ...draft, id: edit.id } : draft)
+          if (edit.mode === 'from-trial') await removeEvent(edit.eventId)
           onClose()
         }}
         className="h-14 w-full rounded-2xl bg-mint font-bold text-bg disabled:opacity-40"

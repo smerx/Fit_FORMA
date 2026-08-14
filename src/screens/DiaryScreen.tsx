@@ -2,6 +2,7 @@ import { ChevronLeft, ChevronRight, Copy, Trash2 } from 'lucide-react'
 import { useStore } from '../lib/store'
 import { formatDayTitle, formatWeekday, shiftIso, todayIso } from '../lib/dates'
 import { MEALS, formLabel } from '../lib/labels'
+import { entryUnit } from '../lib/portions'
 import { sumFood } from '../lib/nutrition'
 import { FoodThumb } from '../components/ui'
 import type { FoodItem } from '../types'
@@ -80,7 +81,7 @@ export function DiaryScreen() {
                   <div className="min-w-0 flex-1">
                     <div className="truncate font-medium">{e.name}</div>
                     <div className="text-xs text-white/40">
-                      {e.grams} г · {e.kcal} ккал
+                      {e.grams} {entryUnit(e.foodId)} · {e.kcal} ккал
                       {e.form ? ` · ${formLabel(e.form)}` : ''}
                     </div>
                   </div>

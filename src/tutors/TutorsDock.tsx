@@ -5,13 +5,16 @@ import { ToolsBoundary } from '../tools/error-boundary'
 import { TutorsApp } from './TutorsApp'
 import { useTutorsOptional } from './store'
 import { todayIso } from '../lib/dates'
-import { rosterIds } from './money'
+import { dayRows } from './money'
 import { requestReminderPermission } from './remind'
 
 export function TutorsDock() {
   const tutors = useTutorsOptional()
   if (!tutors?.settings.enabled) return null
-  const todayCount = rosterIds(tutors.students, tutors.lessons, todayIso()).length
+  const today = todayIso()
+  const todayCount =
+    dayRows(tutors.students, tutors.lessons, today).length +
+    tutors.events.filter((e) => e.date === today && (e.kind === 'trial' || e.kind === 'note')).length
   const root = typeof document !== 'undefined' ? document.getElementById('phone-root') : null
   const overlay = tutors.open && (
     <ToolsBoundary name="tutors" fallback={<Crash onClose={() => tutors.setOpen(false)} />}>
@@ -106,7 +109,8 @@ export function TutorsSettings() {
         />
       </label>
       <p className="text-[11px] text-white/35">
-        Разреши уведомления для Chrome / Формы. Надёжнее, если приложение стоит на экране и его не выкидывают из памяти.
+        Пуш за 15 минут. Пока приложение открыто — всегда. Если смахнул с памяти, Chrome будит воркер, когда может.
+        Чтобы пуш приходил и после полного убийства: SQL migrate-v8, ключи VAPID на Vercel и GitHub Action.
       </p>
       <label className="block">
         <span className="mb-1 block text-xs text-white/45">Реквизиты в тексте оплаты</span>

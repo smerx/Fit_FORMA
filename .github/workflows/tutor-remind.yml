@@ -1,0 +1,23 @@
+name: Tutor lesson reminders
+
+on:
+  schedule:
+    - cron: '*/15 * * * *'
+  workflow_dispatch:
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Fire due tutor pushes
+        env:
+          APP_URL: ${{ secrets.APP_URL }}
+          TUTOR_CRON_SECRET: ${{ secrets.TUTOR_CRON_SECRET }}
+        run: |
+          if [ -z "$APP_URL" ] || [ -z "$TUTOR_CRON_SECRET" ]; then
+            echo "APP_URL or TUTOR_CRON_SECRET not set. Skip."
+            exit 0
+          fi
+          curl -fsS -X POST \
+            -H "Authorization: Bearer $TUTOR_CRON_SECRET" \
+            "$APP_URL/api/tutor-remind"

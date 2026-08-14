@@ -13,6 +13,7 @@ import { MEALS } from '../lib/labels'
 import { CalorieRing, MacroBar } from '../components/CalorieRing'
 import { FoodThumb } from '../components/ui'
 import { TipCard, TipSheet, useDismissedTips } from '../components/TipCard'
+import { entryUnit } from '../lib/portions'
 import type { FoodItem } from '../types'
 
 export function TodayScreen() {
@@ -126,7 +127,7 @@ export function TodayScreen() {
               onClick={() => addWater(ml)}
               className="h-11 flex-1 rounded-2xl bg-white/8 text-sm font-semibold"
             >
-              +{ml}
+              +{ml} мл
             </button>
           ))}
         </div>
@@ -201,7 +202,9 @@ export function TodayScreen() {
                         size={32}
                       />
                       <span className="min-w-0 flex-1 truncate">{e.name}</span>
-                      <span className="text-white/40">{e.grams} г</span>
+                      <span className="text-white/40">
+                        {e.grams} {entryUnit(e.foodId)}
+                      </span>
                     </div>
                   ))}
                 </div>

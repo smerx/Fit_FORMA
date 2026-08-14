@@ -11,7 +11,7 @@ import { supabase } from '../lib/supabase'
 import { nid } from '../lib/dates'
 import type { LessonStatus, PayKind, TutorEvent, TutorEventKind, TutorLesson, TutorSettings, TutorStudent } from './types'
 import { defaultTutorSettings } from './types'
-import { hydrateStudent, packSize, usedInPack } from './money'
+import { hydrateLesson, hydrateStudent, packSize, usedInPack } from './money'
 import { syncLessonReminders } from './remind'
 import {
   deleteEventRow,
@@ -60,11 +60,24 @@ function mergeStudents(local: TutorStudent[], remote: TutorStudent[]): TutorStud
   return [...merged, ...local.filter((s) => !remoteIds.has(s.id)).map((s) => hydrateStudent(s))]
 }
 
-function mergeEvents(local: TutorEvent[], remote: TutorEvent[]): TutorEvent[] {
+function mergeById<T extends { id: string }>(local: T[], remote: T[]): T[] {
   if (!remote.length) return local
   const map = new Map(remote.map((e) => [e.id, e]))
   for (const l of local) if (!map.has(l.id)) map.set(l.id, l)
   return [...map.values()]
+}
+
+function hydrateEvent(raw: Partial<TutorEvent>): TutorEvent {
+  return {
+    id: raw.id ?? '',
+    date: raw.date ?? '',
+    kind: raw.kind ?? 'payment',
+    studentId: raw.studentId ?? null,
+    amountRub: raw.amountRub ?? 0,
+    title: raw.title ?? '',
+    timeHm: raw.timeHm ?? null,
+    createdAt: raw.createdAt ?? '',
+  }
 }
 
 function loadLocal(): Bundle {
@@ -75,8 +88,8 @@ function loadLocal(): Bundle {
     return {
       settings: { ...defaultTutorSettings(), ...parsed.settings },
       students: (parsed.students ?? []).map((s) => hydrateStudent(s)),
-      lessons: parsed.lessons ?? [],
-      events: parsed.events ?? [],
+      lessons: (parsed.lessons ?? []).map((l) => hydrateLesson(l)),
+      events: (parsed.events ?? []).map((e) => hydrateEvent(e)),
     }
   } catch {
     return empty
@@ -95,12 +108,20 @@ type TutorsStore = {
   saveStudent: (input: Omit<TutorStudent, 'id' | 'createdAt'> & { id?: string }) => Promise<void>
   removeStudent: (id: string) => Promise<void>
   reorderStudents: (orderedIds: string[]) => Promise<void>
-  setLesson: (studentId: string, date: string, status: LessonStatus | null) => Promise<void>
+  setLesson: (input: {
+    id?: string
+    studentId: string
+    date: string
+    timeHm: string
+    status: LessonStatus | null
+  }) => Promise<void>
   saveEvent: (input: {
     date: string
     kind: TutorEventKind
-    studentId: string
-    amountRub: number
+    studentId?: string | null
+    amountRub?: number
+    title?: string
+    timeHm?: string | null
     id?: string
   }) => Promise<void>
   removeEvent: (id: string) => Promise<void>
@@ -140,8 +161,8 @@ export function TutorsProvider({ children }: { children: ReactNode }) {
         commit({
           settings: { ...defaultTutorSettings(), ...local.settings, ...remote.settings },
           students: mergeStudents(local.students, remote.students),
-          lessons: remote.lessons.length ? remote.lessons : local.lessons,
-          events: mergeEvents(local.events, remote.events),
+          lessons: mergeById(local.lessons.map(hydrateLesson), remote.lessons.map(hydrateLesson)),
+          events: mergeById(local.events.map(hydrateEvent), remote.events.map(hydrateEvent)),
         })
       })
       .catch(() => {
@@ -154,17 +175,17 @@ export function TutorsProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const on = bundle.settings.enabled && bundle.settings.remindersOn
-    syncLessonReminders(bundle.students, bundle.lessons, on)
+    syncLessonReminders(bundle.students, bundle.lessons, on, bundle.events, userId)
     const vis = () => {
       if (document.visibilityState === 'visible') {
-        syncLessonReminders(bundle.students, bundle.lessons, on)
+        syncLessonReminders(bundle.students, bundle.lessons, on, bundle.events, userId)
       }
     }
     document.addEventListener('visibilitychange', vis)
     return () => {
       document.removeEventListener('visibilitychange', vis)
     }
-  }, [bundle.settings.enabled, bundle.settings.remindersOn, bundle.students, bundle.lessons])
+  }, [bundle.settings.enabled, bundle.settings.remindersOn, bundle.students, bundle.lessons, bundle.events, userId])
 
   const cloud = useCallback(
     async (fn: () => Promise<void>) => {
@@ -263,29 +284,43 @@ export function TutorsProvider({ children }: { children: ReactNode }) {
   )
 
   const setLesson = useCallback(
-    async (studentId: string, date: string, status: LessonStatus | null) => {
-      let lessons = bundle.lessons.filter((l) => !(l.studentId === studentId && l.date === date))
-      const prev = bundle.lessons.find((l) => l.studentId === studentId && l.date === date)
-      if (status) {
-        lessons = [
-          {
-            id: prev?.id ?? nid(),
-            studentId,
-            date,
-            status,
-            createdAt: prev?.createdAt ?? new Date().toISOString(),
-          },
-          ...lessons,
-        ]
+    async (input: {
+      id?: string
+      studentId: string
+      date: string
+      timeHm: string
+      status: LessonStatus | null
+    }) => {
+      const prev = input.id
+        ? bundle.lessons.find((l) => l.id === input.id)
+        : undefined
+      let lessons = bundle.lessons
+      if (input.status === null && prev) {
+        lessons = lessons.filter((l) => l.id !== prev.id)
+      } else if (input.status) {
+        const row = hydrateLesson({
+          id: prev?.id ?? nid(),
+          studentId: input.studentId,
+          date: input.date,
+          timeHm: input.timeHm,
+          status: input.status,
+          createdAt: prev?.createdAt ?? new Date().toISOString(),
+        })
+        lessons = [row, ...lessons.filter((l) => l.id !== row.id)]
       }
       let students = bundle.students
-      const student = students.find((s) => s.id === studentId)
+      const student = students.find((s) => s.id === input.studentId)
       const size = student ? packSize(student.payKind) : null
-      if (student && size && status && (status === 'held' || status === 'skipped' || status === 'extra')) {
+      if (
+        student &&
+        size &&
+        input.status &&
+        (input.status === 'held' || input.status === 'skipped' || input.status === 'extra')
+      ) {
         const used = usedInPack({ ...student }, lessons)
         if (used > size) {
-          const next = hydrateStudent({ ...student, packStartedOn: date })
-          students = students.map((s) => (s.id === studentId ? next : s))
+          const next = hydrateStudent({ ...student, packStartedOn: input.date })
+          students = students.map((s) => (s.id === input.studentId ? next : s))
           await cloud(async () => {
             if (!userId) return
             await upsertStudentRow(userId, next)
@@ -295,8 +330,17 @@ export function TutorsProvider({ children }: { children: ReactNode }) {
       commit({ ...bundle, students, lessons })
       await cloud(async () => {
         if (!userId) return
-        const row = lessons.find((l) => l.studentId === studentId && l.date === date)
-        if (row) await upsertLessonRow(userId, row)
+        const saved =
+          input.status === null
+            ? undefined
+            : lessons.find(
+                (l) =>
+                  l.studentId === input.studentId &&
+                  l.date === input.date &&
+                  l.timeHm === input.timeHm &&
+                  l.status === input.status,
+              ) ?? lessons.find((l) => l.id === prev?.id)
+        if (saved) await upsertLessonRow(userId, saved)
         else if (prev) await deleteLessonRow(userId, prev.id)
       })
     },
@@ -307,23 +351,29 @@ export function TutorsProvider({ children }: { children: ReactNode }) {
     async (input: {
       date: string
       kind: TutorEventKind
-      studentId: string
-      amountRub: number
+      studentId?: string | null
+      amountRub?: number
+      title?: string
+      timeHm?: string | null
       id?: string
     }) => {
       const prev = input.id
         ? bundle.events.find((e) => e.id === input.id)
-        : bundle.events.find(
-            (e) => e.date === input.date && e.studentId === input.studentId && e.kind === input.kind,
-          )
-      const row: TutorEvent = {
+        : input.kind === 'payment' && input.studentId
+          ? bundle.events.find(
+              (e) => e.date === input.date && e.studentId === input.studentId && e.kind === input.kind,
+            )
+          : undefined
+      const row = hydrateEvent({
         id: prev?.id ?? nid(),
         date: input.date,
         kind: input.kind,
-        studentId: input.studentId,
-        amountRub: input.amountRub,
+        studentId: input.studentId ?? prev?.studentId ?? null,
+        amountRub: input.amountRub ?? prev?.amountRub ?? 0,
+        title: input.title ?? prev?.title ?? '',
+        timeHm: input.timeHm !== undefined ? input.timeHm : prev?.timeHm ?? null,
         createdAt: prev?.createdAt ?? new Date().toISOString(),
-      }
+      })
       const events = [row, ...bundle.events.filter((e) => e.id !== row.id)]
       commit({ ...bundle, events })
       await cloud(async () => {
@@ -391,6 +441,7 @@ export function useTutorsOptional(): TutorsStore | null {
 
 export const defaultStudentDraft = (
   today: string,
+  patch: Partial<Omit<TutorStudent, 'id' | 'createdAt'>> = {},
 ): Omit<TutorStudent, 'id' | 'createdAt'> => ({
   name: '',
   payKind: 'pack8' as PayKind,
@@ -403,4 +454,5 @@ export const defaultStudentDraft = (
   packStartedOn: today,
   note: '',
   sortOrder: 0,
+  ...patch,
 })

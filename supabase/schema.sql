@@ -234,9 +234,9 @@ create table if not exists public.tutor_lessons (
   user_id uuid not null references auth.users (id) on delete cascade,
   student_id uuid not null references public.tutor_students (id) on delete cascade,
   held_on date not null,
+  time_hm text not null default '',
   status text not null check (status in ('held', 'skipped', 'cancelled', 'extra')),
-  created_at timestamptz not null default now(),
-  unique (student_id, held_on)
+  created_at timestamptz not null default now()
 );
 
 create index if not exists tutor_students_user on public.tutor_students (user_id, created_at);
@@ -266,10 +266,12 @@ alter table public.tutor_students add column if not exists sort_order integer no
 create table if not exists public.tutor_events (
   id uuid primary key,
   user_id uuid not null references auth.users (id) on delete cascade,
-  student_id uuid not null references public.tutor_students (id) on delete cascade,
+  student_id uuid references public.tutor_students (id) on delete cascade,
   happened_on date not null,
-  kind text not null check (kind in ('payment')),
+  kind text not null check (kind in ('payment', 'trial', 'note')),
   amount_rub integer not null default 0,
+  title text not null default '',
+  time_hm text,
   created_at timestamptz not null default now()
 );
 
@@ -279,4 +281,45 @@ alter table public.tutor_events enable row level security;
 
 drop policy if exists "own tutor events" on public.tutor_events;
 create policy "own tutor events" on public.tutor_events
+  for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+
+alter table public.tutor_lessons drop constraint if exists tutor_lessons_student_id_held_on_key;
+alter table public.tutor_lessons add column if not exists time_hm text not null default '';
+alter table public.tutor_events alter column student_id drop not null;
+alter table public.tutor_events add column if not exists title text not null default '';
+alter table public.tutor_events add column if not exists time_hm text;
+alter table public.tutor_events drop constraint if exists tutor_events_kind_check;
+alter table public.tutor_events add constraint tutor_events_kind_check
+  check (kind in ('payment', 'trial', 'note'));
+
+create table if not exists public.tutor_push_subs (
+  endpoint text primary key,
+  user_id uuid not null references auth.users (id) on delete cascade,
+  p256dh text not null,
+  auth text not null,
+  created_at timestamptz not null default now()
+);
+
+create table if not exists public.tutor_reminder_queue (
+  id uuid primary key,
+  user_id uuid not null references auth.users (id) on delete cascade,
+  fire_at timestamptz not null,
+  title text not null,
+  body text not null default '',
+  tag text not null,
+  sent_at timestamptz,
+  unique (user_id, tag)
+);
+
+create index if not exists tutor_reminder_queue_due on public.tutor_reminder_queue (fire_at) where sent_at is null;
+
+alter table public.tutor_push_subs enable row level security;
+alter table public.tutor_reminder_queue enable row level security;
+
+drop policy if exists "own tutor push subs" on public.tutor_push_subs;
+create policy "own tutor push subs" on public.tutor_push_subs
+  for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+
+drop policy if exists "own tutor reminders" on public.tutor_reminder_queue;
+create policy "own tutor reminders" on public.tutor_reminder_queue
   for all using (auth.uid() = user_id) with check (auth.uid() = user_id);

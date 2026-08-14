@@ -3,26 +3,27 @@ import { Star } from 'lucide-react'
 import { useStore } from '../lib/store'
 import { macrosForGrams } from '../lib/nutrition'
 import { formHint } from '../lib/labels'
+import { defaultPortionGrams, portionPresets, portionUnit } from '../lib/portions'
 import { FoodThumb, FormBadge, Sheet } from './ui'
-
-const PRESETS = [50, 100, 150, 200, 250]
 
 export function GramSheet() {
   const { overlay, setOverlay, addFood, snapshot, toggleFavorite } = useStore()
-  const [grams, setGrams] = useState(100)
   const food = overlay.type === 'grams' ? overlay.food : null
   const meal = overlay.type === 'grams' ? overlay.meal : 'lunch'
+  const unit = food ? portionUnit(food) : 'г'
+  const presets = food ? portionPresets(food) : []
+  const [grams, setGrams] = useState(100)
   const macros = food ? macrosForGrams(food, grams) : null
   const fav = food ? snapshot.favorites.includes(food.id) : false
 
   useEffect(() => {
-    setGrams(100)
+    if (food) setGrams(defaultPortionGrams(food))
   }, [food?.id])
 
   if (overlay.type !== 'grams' || !food || !macros) return null
 
   return (
-    <Sheet title="Граммовка" onClose={() => setOverlay({ type: 'search', meal })}>
+    <Sheet title={unit === 'мл' ? 'Объём' : 'Граммовка'} onClose={() => setOverlay({ type: 'search', meal })}>
       <div className="mb-4 flex items-center gap-3">
         <FoodThumb food={food} size={64} />
         <div className="min-w-0 flex-1">
@@ -51,27 +52,27 @@ export function GramSheet() {
             onChange={(e) => setGrams(Math.max(1, Number(e.target.value) || 1))}
             className="w-28 bg-transparent text-5xl font-extrabold outline-none"
           />
-          <span className="pb-2 text-lg text-white/50">г</span>
+          <span className="pb-2 text-lg text-white/50">{unit}</span>
         </div>
         <input
           type="range"
-          min={10}
-          max={500}
+          min={unit === 'мл' ? 50 : 10}
+          max={unit === 'мл' ? 700 : 500}
           step={5}
-          value={Math.min(grams, 500)}
+          value={Math.min(grams, unit === 'мл' ? 700 : 500)}
           onChange={(e) => setGrams(Number(e.target.value))}
           className="mt-3 w-full"
         />
         <div className="mt-3 flex gap-2 overflow-x-auto no-scrollbar">
-          {PRESETS.map((n) => (
+          {presets.map((n) => (
             <button
-              key={n}
-              onClick={() => setGrams(n)}
+              key={n.label}
+              onClick={() => setGrams(n.grams)}
               className={`h-10 shrink-0 rounded-full px-3 text-sm font-semibold ${
-                grams === n ? 'bg-mint text-bg' : 'bg-white/8'
+                grams === n.grams ? 'bg-mint text-bg' : 'bg-white/8'
               }`}
             >
-              {n} г
+              {n.label}
             </button>
           ))}
         </div>

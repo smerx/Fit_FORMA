@@ -25,27 +25,40 @@ export type TutorStudent = {
   createdAt: string
 }
 
-export type TutorEventKind = 'payment'
+export type TutorEventKind = 'payment' | 'trial' | 'note'
 
 export type TutorEvent = {
   id: string
   date: string
   kind: TutorEventKind
-  studentId: string
+  studentId: string | null
   amountRub: number
+  title: string
+  timeHm: string | null
   createdAt: string
 }
 
 export const EVENT_KIND_LABEL: Record<TutorEventKind, string> = {
   payment: 'Оплата абонемента',
+  trial: 'Пробное',
+  note: 'Заметка',
 }
 
 export type TutorLesson = {
   id: string
   studentId: string
   date: string
+  timeHm: string
   status: LessonStatus
   createdAt: string
+}
+
+export type DayRow = {
+  key: string
+  student: TutorStudent
+  timeHm: string
+  rec?: TutorLesson
+  kind: 'regular' | 'extra'
 }
 
 export const defaultTutorSettings = (): TutorSettings => ({

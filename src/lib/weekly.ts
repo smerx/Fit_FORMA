@@ -23,8 +23,9 @@ export function weekReport(
     return { date, macros, burned, deficit, water, logged: dayFood.length > 0 }
   })
   const logged = perDay.filter((d) => d.logged)
-  const avg = (pick: (d: (typeof perDay)[number]) => number) =>
-    logged.length ? Math.round(logged.reduce((s, d) => s + pick(d), 0) / logged.length) : 0
+  const waterDays = perDay.filter((d) => d.water > 0)
+  const avg = (pick: (d: (typeof perDay)[number]) => number, days = logged) =>
+    days.length ? Math.round(days.reduce((s, d) => s + pick(d), 0) / days.length) : 0
 
   const weekWeights = [...weights]
     .filter((w) => w.date >= days[0] && w.date <= days[days.length - 1])
@@ -39,7 +40,7 @@ export function weekReport(
     avgEaten: avg((d) => d.macros.kcal),
     avgProtein: avg((d) => d.macros.protein),
     avgDeficit: avg((d) => d.deficit),
-    avgWater: avg((d) => d.water),
+    avgWater: avg((d) => d.water, waterDays.length ? waterDays : logged),
     target,
     proteinNeed,
     waterGoal: profile.waterGoalMl,

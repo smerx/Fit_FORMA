@@ -14,6 +14,7 @@ export default defineConfig({
       includeAssets: ['favicon.svg', 'apple-touch-icon.png'],
       workbox: {
         navigateFallbackDenylist: [/^\/api\//],
+        importScripts: ['remind-sw.js'],
       },
       manifest: {
         name: 'Форма',

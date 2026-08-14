@@ -1,6 +1,6 @@
 import { addDays, differenceInCalendarDays, format, getISODay, parseISO } from 'date-fns'
 import { shiftIso } from '../lib/dates'
-import type { PayKind, TutorLesson, TutorSlot, TutorStudent } from './types'
+import type { PayKind, TutorEvent, TutorLesson, TutorSlot, TutorStudent } from './types'
 import { WEEKDAYS } from './types'
 import { instrumentalName } from './names'
 
@@ -51,6 +51,7 @@ export function hydrateStudent(raw: Partial<TutorStudent> & { slots?: TutorSlot[
     active: raw.active ?? true,
     packStartedOn: raw.packStartedOn ?? null,
     note: raw.note ?? '',
+    sortOrder: raw.sortOrder ?? 0,
     createdAt: raw.createdAt ?? '',
   }
 }
@@ -181,11 +182,15 @@ export function expectedInDays(
   lessons: TutorLesson[],
   today: string,
   days: number,
+  events: TutorEvent[] = [],
 ): { expected: number; cautious: number } {
   const end = format(addDays(parseISO(today), days - 1), 'yyyy-MM-dd')
   let sum = 0
   for (const s of students.filter((x) => x.active)) {
-    sum += cashInWindow(s, lessons, today, end)
+    sum += cashInWindow(s, lessons, events, today, end)
+  }
+  for (const e of events) {
+    if (e.kind === 'payment' && e.date >= today && e.date <= end) sum += e.amountRub
   }
   return { expected: sum, cautious: Math.round(sum * 0.88) }
 }
@@ -197,7 +202,13 @@ function lessonHappens(s: TutorStudent, lessons: TutorLesson[], iso: string): bo
   return isRegularOn(s, iso)
 }
 
-function cashInWindow(s: TutorStudent, lessons: TutorLesson[], today: string, end: string): number {
+function cashInWindow(
+  s: TutorStudent,
+  lessons: TutorLesson[],
+  events: TutorEvent[],
+  today: string,
+  end: string,
+): number {
   if (s.payKind === 'hourly') {
     let sum = 0
     for (let iso = today; iso <= end; iso = shiftIso(iso, 1)) {
@@ -210,7 +221,13 @@ function cashInWindow(s: TutorStudent, lessons: TutorLesson[], today: string, en
   let left = remainingInPack(s, lessons) ?? size
   let sum = 0
   if (left === 0) {
-    if (today <= end) sum += s.priceRub
+    const alreadyPaid = events.some(
+      (e) =>
+        e.kind === 'payment' &&
+        e.studentId === s.id &&
+        e.date >= (s.packStartedOn ?? today),
+    )
+    if (!alreadyPaid && today <= end) sum += s.priceRub
     left = size
   }
   for (let iso = today; iso <= end; iso = shiftIso(iso, 1)) {

@@ -21,7 +21,23 @@ export type TutorStudent = {
   active: boolean
   packStartedOn: string | null
   note: string
+  sortOrder: number
   createdAt: string
+}
+
+export type TutorEventKind = 'payment'
+
+export type TutorEvent = {
+  id: string
+  date: string
+  kind: TutorEventKind
+  studentId: string
+  amountRub: number
+  createdAt: string
+}
+
+export const EVENT_KIND_LABEL: Record<TutorEventKind, string> = {
+  payment: 'Оплата абонемента',
 }
 
 export type TutorLesson = {

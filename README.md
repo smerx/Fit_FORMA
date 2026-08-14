@@ -65,7 +65,7 @@ copy .env.example .env
 
 Если уже создал проект и добавляешь воду/витамины: SQL Editor → файл [`supabase/migrate-v2.sql`](supabase/migrate-v2.sql) → Run.
 
-Голос и планирование: SQL Editor → [`supabase/migrate-v3.sql`](supabase/migrate-v3.sql) → Run, затем [`supabase/migrate-v4.sql`](supabase/migrate-v4.sql) (календарь и журнал). Ученики: [`supabase/migrate-v5.sql`](supabase/migrate-v5.sql), затем [`supabase/migrate-v6.sql`](supabase/migrate-v6.sql) (разное время по дням). Бесплатный ключ Groq: [console.groq.com/keys](https://console.groq.com/keys) → вставь `gsk_...` в профиле, блок «Инструменты». Голос, план и ученики живут внизу вкладки «Прогресс» и не связаны с дневником еды: любое можно выключить.
+Голос и планирование: SQL Editor → [`supabase/migrate-v3.sql`](supabase/migrate-v3.sql) → Run, затем [`supabase/migrate-v4.sql`](supabase/migrate-v4.sql) (календарь и журнал). Ученики: [`supabase/migrate-v5.sql`](supabase/migrate-v5.sql), затем [`supabase/migrate-v6.sql`](supabase/migrate-v6.sql) (разное время по дням), затем [`supabase/migrate-v7.sql`](supabase/migrate-v7.sql) (оплаты и порядок списка). Бесплатный ключ Groq: [console.groq.com/keys](https://console.groq.com/keys) → вставь `gsk_...` в профиле, блок «Инструменты». Голос, план и ученики живут внизу вкладки «Прогресс» и не связаны с дневником еды: любое можно выключить.
 
 ### 4. Чтобы база не засыпала
 

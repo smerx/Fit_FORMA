@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from 'react'
-import { ChevronLeft, ChevronRight, Copy, Plus, Trash2 } from 'lucide-react'
+import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
+import { ChevronLeft, ChevronRight, Copy, GripVertical, Plus, Trash2 } from 'lucide-react'
 import { formatDayTitle, formatWeekday, shiftIso, todayIso } from '../lib/dates'
 import {
   expectedInDays,
@@ -15,8 +15,8 @@ import {
   timeOn,
 } from './money'
 import { defaultStudentDraft, useTutors } from './store'
-import type { TutorStudent } from './types'
-import { PAY_KIND_LABEL, WEEKDAYS } from './types'
+import type { TutorEventKind, TutorStudent } from './types'
+import { EVENT_KIND_LABEL, PAY_KIND_LABEL, WEEKDAYS } from './types'
 
 type Tab = 'day' | 'list' | 'money'
 type Edit = { mode: 'new' } | { mode: 'edit'; id: string } | null
@@ -38,7 +38,7 @@ export function TutorsApp() {
           Прогноз
         </TabBtn>
       </div>
-      {tab === 'day' && <DayPane onAdd={() => setEdit({ mode: 'new' })} />}
+      {tab === 'day' && <DayPane />}
       {tab === 'list' && <ListPane onNew={() => setEdit({ mode: 'new' })} onOpen={(id) => setEdit({ mode: 'edit', id })} />}
       {tab === 'money' && <MoneyPane />}
     </div>
@@ -56,10 +56,11 @@ function TabBtn({ on, onClick, children }: { on: boolean; onClick: () => void; c
   )
 }
 
-function DayPane({ onAdd }: { onAdd: () => void }) {
-  const { students, lessons, setLesson } = useTutors()
+function DayPane() {
+  const { students, lessons, events, setLesson, removeEvent } = useTutors()
   const [date, setDate] = useState(todayIso)
   const [pick, setPick] = useState(false)
+  const [eventOpen, setEventOpen] = useState(false)
   const today = todayIso()
   const ids = rosterIds(students, lessons, date)
   const rows = ids
@@ -67,6 +68,8 @@ function DayPane({ onAdd }: { onAdd: () => void }) {
     .filter((s): s is TutorStudent => Boolean(s))
     .sort((a, b) => timeOn(a, date).localeCompare(timeOn(b, date)) || a.name.localeCompare(b.name, 'ru'))
   const extras = students.filter((s) => s.active && !ids.includes(s.id))
+  const dayEvents = events.filter((e) => e.date === date)
+  if (eventOpen) return <EventSheet date={date} onClose={() => setEventOpen(false)} />
 
   return (
     <div className="space-y-4">
@@ -92,6 +95,26 @@ function DayPane({ onAdd }: { onAdd: () => void }) {
       <p className="text-sm text-white/45">
         Пропуск — занятие оплачивают, в шаблоне будет (п.б.ув.пр). Отмена — нет. Перенос: «на этот день».
       </p>
+      {dayEvents.length > 0 && (
+        <div className="space-y-2">
+          {dayEvents.map((e) => {
+            const s = students.find((x) => x.id === e.studentId)
+            return (
+              <div key={e.id} className="flex items-center justify-between gap-2 rounded-3xl bg-mint/15 px-4 py-3">
+                <div className="min-w-0">
+                  <div className="text-sm font-semibold">{EVENT_KIND_LABEL[e.kind]}</div>
+                  <div className="text-xs text-white/50">
+                    {s?.name ?? 'ученик'} · {rub(e.amountRub)}
+                  </div>
+                </div>
+                <button onClick={() => void removeEvent(e.id)} className="text-xs text-white/35">
+                  убрать
+                </button>
+              </div>
+            )
+          })}
+        </div>
+      )}
       {rows.length === 0 && <p className="text-sm text-white/30">На этот день никого. Можно добавить перенос.</p>}
       <div className="space-y-2">
         {rows.map((s) => {
@@ -150,7 +173,10 @@ function DayPane({ onAdd }: { onAdd: () => void }) {
         >
           На этот день
         </button>
-        <button onClick={onAdd} className="flex h-12 w-12 items-center justify-center rounded-2xl bg-mint text-bg">
+        <button
+          onClick={() => setEventOpen(true)}
+          className="flex h-12 w-12 items-center justify-center rounded-2xl bg-mint text-bg"
+        >
           <Plus size={20} />
         </button>
       </div>
@@ -186,33 +212,205 @@ function Mark({ on, label, onClick }: { on: boolean; onClick: () => void; label:
   )
 }
 
+function EventSheet({ date, onClose }: { date: string; onClose: () => void }) {
+  const { students, saveEvent } = useTutors()
+  const active = students
+    .filter((s) => s.active)
+    .slice()
+    .sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0) || a.name.localeCompare(b.name, 'ru'))
+  const [kind] = useState<TutorEventKind>('payment')
+  const [studentId, setStudentId] = useState(active[0]?.id ?? '')
+  const selected = students.find((s) => s.id === studentId)
+  const [amount, setAmount] = useState(selected?.priceRub ?? 0)
+
+  return (
+    <div className="space-y-3 pb-8">
+      <button onClick={onClose} className="text-sm text-mint">
+        ← назад
+      </button>
+      <h2 className="text-xl font-extrabold">Событие</h2>
+      <p className="text-sm text-white/45">
+        Пока одно: оплата абонемента. Потом сюда же можно будет пробное, бонус, каникулы.
+      </p>
+      <div className="text-xs text-white/45">Тип</div>
+      <div className="h-11 rounded-xl bg-mint text-center text-sm font-semibold leading-[44px] text-bg">
+        {EVENT_KIND_LABEL[kind]}
+      </div>
+      <div className="text-xs text-white/45">За кого</div>
+      {active.length === 0 && <p className="text-sm text-white/30">Сначала добавь ученика во вкладке «Ученики»</p>}
+      <div className="space-y-2">
+        {active.map((s) => (
+          <button
+            key={s.id}
+            onClick={() => {
+              setStudentId(s.id)
+              setAmount(s.priceRub)
+            }}
+            className={`flex h-12 w-full items-center rounded-2xl px-4 text-left font-medium ${
+              studentId === s.id ? 'bg-mint text-bg' : 'bg-card'
+            }`}
+          >
+            {s.name}
+          </button>
+        ))}
+      </div>
+      <Num label="Сумма, ₽" value={amount} onChange={setAmount} />
+      <p className="text-[11px] text-white/35">
+        Это только факт оплаты. Абонемент считается по занятиям: если уже шли уроки нового пакета — они остаются.
+      </p>
+      <button
+        disabled={!studentId}
+        onClick={async () => {
+          await saveEvent({ date, kind, studentId, amountRub: amount })
+          onClose()
+        }}
+        className="h-14 w-full rounded-2xl bg-mint font-bold text-bg disabled:opacity-40"
+      >
+        Сохранить
+      </button>
+    </div>
+  )
+}
+
 function ListPane({ onNew, onOpen }: { onNew: () => void; onOpen: (id: string) => void }) {
-  const { students, lessons } = useTutors()
+  const { students, lessons, reorderStudents } = useTutors()
   const today = todayIso()
-  const list = students.slice().sort((a, b) => a.name.localeCompare(b.name, 'ru'))
+  const bySort = useMemo(
+    () =>
+      students.slice().sort((a, b) => {
+        const d = (a.sortOrder ?? 0) - (b.sortOrder ?? 0)
+        if (d !== 0) return d
+        return a.name.localeCompare(b.name, 'ru')
+      }),
+    [students],
+  )
+  const [order, setOrder] = useState(() => bySort.map((s) => s.id))
+  const [dragId, setDragId] = useState<string | null>(null)
+  const holdRef = useRef<number | null>(null)
+  const dragIdRef = useRef<string | null>(null)
+  const skipClickRef = useRef(false)
+  const startRef = useRef({ x: 0, y: 0 })
+  const orderRef = useRef(order)
+  orderRef.current = order
+
+  useEffect(() => {
+    if (dragIdRef.current) return
+    setOrder(bySort.map((s) => s.id))
+  }, [bySort])
+
+  function clearHold() {
+    if (holdRef.current != null) {
+      window.clearTimeout(holdRef.current)
+      holdRef.current = null
+    }
+  }
+
+  function indexAtY(y: number, current: string[]): number {
+    for (let i = 0; i < current.length; i++) {
+      const el = document.getElementById(`tutor-stu-${current[i]}`)
+      if (!el) continue
+      const r = el.getBoundingClientRect()
+      if (y < r.top + r.height / 2) return i
+    }
+    return Math.max(0, current.length - 1)
+  }
+
+  function onPointerDown(id: string, e: ReactPointerEvent<HTMLButtonElement>) {
+    startRef.current = { x: e.clientX, y: e.clientY }
+    skipClickRef.current = false
+    clearHold()
+    const target = e.currentTarget
+    const pointerId = e.pointerId
+    holdRef.current = window.setTimeout(() => {
+      dragIdRef.current = id
+      skipClickRef.current = true
+      setDragId(id)
+      try {
+        target.setPointerCapture(pointerId)
+      } catch {
+        /* android */
+      }
+    }, 380)
+  }
+
+  function onPointerMove(e: ReactPointerEvent<HTMLButtonElement>) {
+    const current = dragIdRef.current
+    const dx = e.clientX - startRef.current.x
+    const dy = e.clientY - startRef.current.y
+    if (!current && (Math.abs(dx) > 8 || Math.abs(dy) > 8)) {
+      clearHold()
+      return
+    }
+    if (!current) return
+    e.preventDefault()
+    const from = orderRef.current.indexOf(current)
+    const to = indexAtY(e.clientY, orderRef.current)
+    if (from < 0 || from === to) return
+    const next = orderRef.current.slice()
+    const [item] = next.splice(from, 1)
+    next.splice(to, 0, item!)
+    orderRef.current = next
+    setOrder(next)
+  }
+
+  async function onPointerUp() {
+    clearHold()
+    if (dragIdRef.current) {
+      dragIdRef.current = null
+      setDragId(null)
+      await reorderStudents(orderRef.current)
+    }
+  }
+
+  const list = order
+    .map((id) => students.find((s) => s.id === id))
+    .filter((s): s is TutorStudent => Boolean(s))
+
   return (
     <div className="space-y-3">
       <button onClick={onNew} className="h-12 w-full rounded-2xl bg-mint font-bold text-bg">
         Новый ученик
       </button>
+      <p className="text-xs text-white/40">Удержи палец на ученике и перетащи, чтобы поменять местами.</p>
       {list.length === 0 && <p className="text-sm text-white/30">Пока никого</p>}
       {list.map((s) => {
         const left = remainingInPack(s, lessons)
         return (
           <button
             key={s.id}
-            onClick={() => onOpen(s.id)}
-            className="w-full rounded-3xl bg-card px-4 py-3 text-left"
+            id={`tutor-stu-${s.id}`}
+            onClick={() => {
+              if (skipClickRef.current) {
+                skipClickRef.current = false
+                return
+              }
+              onOpen(s.id)
+            }}
+            onPointerDown={(e) => onPointerDown(s.id, e)}
+            onPointerMove={onPointerMove}
+            onPointerUp={() => void onPointerUp()}
+            onPointerCancel={() => {
+              clearHold()
+              dragIdRef.current = null
+              setDragId(null)
+            }}
+            style={{ touchAction: dragId ? 'none' : 'pan-y', userSelect: 'none' }}
+            className={`flex w-full items-center gap-2 rounded-3xl px-3 py-3 text-left ${
+              dragId === s.id ? 'bg-mint/20' : 'bg-card'
+            }`}
           >
-            <div className="flex items-baseline justify-between gap-2">
-              <span className={`font-semibold ${s.active ? '' : 'text-white/35'}`}>{s.name}</span>
-              <span className="text-[11px] text-white/40">{scheduleLabel(s) || s.timeHm}</span>
+            <GripVertical size={16} className="shrink-0 text-white/25" />
+            <div className="min-w-0 flex-1">
+              <div className="flex items-baseline justify-between gap-2">
+                <span className={`font-semibold ${s.active ? '' : 'text-white/35'}`}>{s.name}</span>
+                <span className="text-[11px] text-white/40">{scheduleLabel(s) || s.timeHm}</span>
+              </div>
+              <div className="mt-1 text-xs text-white/45">
+                {PAY_KIND_LABEL[s.payKind]}
+                {left != null ? ` · осталось ${left}` : ''}
+              </div>
+              <div className="mt-1 text-sm text-mint">{payHint(s, lessons, today)}</div>
             </div>
-            <div className="mt-1 text-xs text-white/45">
-              {PAY_KIND_LABEL[s.payKind]}
-              {left != null ? ` · осталось ${left}` : ''}
-            </div>
-            <div className="mt-1 text-sm text-mint">{payHint(s, lessons, today)}</div>
           </button>
         )
       })}
@@ -221,11 +419,11 @@ function ListPane({ onNew, onOpen }: { onNew: () => void; onOpen: (id: string) =
 }
 
 function MoneyPane() {
-  const { students, lessons } = useTutors()
+  const { students, lessons, events } = useTutors()
   const today = todayIso()
-  const w = expectedInDays(students, lessons, today, 7)
-  const t = expectedInDays(students, lessons, today, 14)
-  const m = expectedInDays(students, lessons, today, 30)
+  const w = expectedInDays(students, lessons, today, 7, events)
+  const t = expectedInDays(students, lessons, today, 14, events)
+  const m = expectedInDays(students, lessons, today, 30, events)
   return (
     <div className="space-y-3">
       <p className="text-sm text-white/45">

@@ -1,5 +1,5 @@
 import { supabase } from '../lib/supabase'
-import type { LessonStatus, PayKind, TutorLesson, TutorSettings, TutorStudent } from './types'
+import type { LessonStatus, PayKind, TutorEvent, TutorEventKind, TutorLesson, TutorSettings, TutorStudent } from './types'
 import { defaultTutorSettings } from './types'
 import { hydrateStudent } from './money'
 
@@ -21,6 +21,7 @@ type StudentRow = {
   active: boolean
   pack_started_on: string | null
   note: string | null
+  sort_order?: number | null
   created_at: string
 }
 
@@ -29,6 +30,15 @@ type LessonRow = {
   student_id: string
   held_on: string
   status: LessonStatus
+  created_at: string
+}
+
+type EventRow = {
+  id: string
+  student_id: string
+  happened_on: string
+  kind: TutorEventKind
+  amount_rub: number
   created_at: string
 }
 
@@ -45,20 +55,34 @@ function mapStudent(r: StudentRow): TutorStudent {
     active: r.active,
     packStartedOn: r.pack_started_on,
     note: r.note ?? '',
+    sortOrder: r.sort_order ?? 0,
     createdAt: r.created_at,
   })
+}
+
+function mapEvent(r: EventRow): TutorEvent {
+  return {
+    id: r.id,
+    studentId: r.student_id,
+    date: r.happened_on,
+    kind: r.kind,
+    amountRub: r.amount_rub,
+    createdAt: r.created_at,
+  }
 }
 
 export async function fetchTutorBundle(userId: string): Promise<{
   settings: TutorSettings
   students: TutorStudent[]
   lessons: TutorLesson[]
+  events: TutorEvent[]
 } | null> {
   if (!supabase) return null
-  const [setRes, stRes, lesRes] = await Promise.all([
+  const [setRes, stRes, lesRes, evRes] = await Promise.all([
     supabase.from('tutor_settings').select('*').eq('user_id', userId).maybeSingle(),
     supabase.from('tutor_students').select('*').eq('user_id', userId).order('created_at', { ascending: true }),
     supabase.from('tutor_lessons').select('*').eq('user_id', userId).order('held_on', { ascending: false }),
+    supabase.from('tutor_events').select('*').eq('user_id', userId).order('happened_on', { ascending: false }),
   ])
   if (setRes.error && stRes.error && lesRes.error) return null
   const row = setRes.data as SettingsRow | null
@@ -80,6 +104,7 @@ export async function fetchTutorBundle(userId: string): Promise<{
           status: r.status,
           createdAt: r.created_at,
         })),
+    events: evRes.error ? [] : ((evRes.data ?? []) as EventRow[]).map(mapEvent),
   }
 }
 
@@ -111,15 +136,20 @@ export async function upsertStudentRow(userId: string, s: TutorStudent) {
     note: s.note,
     created_at: s.createdAt,
   }
-  const withSchedule = { ...base, schedule: s.slots }
-  const first = await supabase.from('tutor_students').upsert(withSchedule)
+  const withSort = { ...base, sort_order: s.sortOrder }
+  const full = { ...withSort, schedule: s.slots }
+  const first = await supabase.from('tutor_students').upsert(full)
   if (!first.error) return
+  const withSchedule = { ...base, schedule: s.slots }
+  const second = await supabase.from('tutor_students').upsert(withSchedule)
+  if (!second.error) return
   const { error } = await supabase.from('tutor_students').upsert(base)
   if (error) throw error
 }
 
 export async function deleteStudentRow(userId: string, id: string) {
   if (!supabase) return
+  await supabase.from('tutor_events').delete().eq('student_id', id).eq('user_id', userId)
   await supabase.from('tutor_lessons').delete().eq('student_id', id).eq('user_id', userId)
   const { error } = await supabase.from('tutor_students').delete().eq('id', id).eq('user_id', userId)
   if (error) throw error
@@ -141,5 +171,25 @@ export async function upsertLessonRow(userId: string, l: TutorLesson) {
 export async function deleteLessonRow(userId: string, id: string) {
   if (!supabase) return
   const { error } = await supabase.from('tutor_lessons').delete().eq('id', id).eq('user_id', userId)
+  if (error) throw error
+}
+
+export async function upsertEventRow(userId: string, e: TutorEvent) {
+  if (!supabase) return
+  const { error } = await supabase.from('tutor_events').upsert({
+    id: e.id,
+    user_id: userId,
+    student_id: e.studentId,
+    happened_on: e.date,
+    kind: e.kind,
+    amount_rub: e.amountRub,
+    created_at: e.createdAt,
+  })
+  if (error) throw error
+}
+
+export async function deleteEventRow(userId: string, id: string) {
+  if (!supabase) return
+  const { error } = await supabase.from('tutor_events').delete().eq('id', id).eq('user_id', userId)
   if (error) throw error
 }

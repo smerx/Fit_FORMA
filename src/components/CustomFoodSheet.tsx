@@ -1,23 +1,36 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useStore } from '../lib/store'
+import { rememberLocalBarcode } from '../data/barcodes-local'
 import { Sheet } from './ui'
 
 export function CustomFoodSheet() {
   const { overlay, setOverlay, addCustomFood } = useStore()
-  const [name, setName] = useState('')
+  const draft = overlay.type === 'custom-food' ? overlay.draftName ?? '' : ''
+  const barcode = overlay.type === 'custom-food' ? overlay.barcode ?? '' : ''
+  const [name, setName] = useState(draft)
   const [grams, setGrams] = useState(100)
   const [kcal, setKcal] = useState(100)
   const [protein, setProtein] = useState(0)
   const [fat, setFat] = useState(0)
   const [carbs, setCarbs] = useState(0)
 
+  useEffect(() => {
+    if (overlay.type === 'custom-food') setName(overlay.draftName ?? '')
+  }, [overlay])
+
   if (overlay.type !== 'custom-food') return null
   const meal = overlay.meal
+  const code = (barcode || name.match(/Код\s+(\d{8,14})/i)?.[1] || '').replace(/\D/g, '')
 
   return (
     <Sheet title="Свой продукт" onClose={() => setOverlay({ type: 'search', meal })}>
       <div className="space-y-3">
-        <Field label="Название" value={name} onChange={setName} placeholder="Например, салат мамы" />
+        {code ? (
+          <p className="rounded-2xl bg-white/5 px-3 py-2 text-xs text-white/45">
+            Штрихкод <span className="font-mono text-white/70">{code}</span> запомнится после сохранения
+          </p>
+        ) : null}
+        <Field label="Название" value={name} onChange={setName} placeholder="Например, молоко Ангара 2,5%" />
         <div className="grid grid-cols-2 gap-3">
           <Num label="Граммы" value={grams} onChange={setGrams} />
           <Num label="Ккал / 100 г" value={kcal} onChange={setKcal} />
@@ -27,9 +40,19 @@ export function CustomFoodSheet() {
         </div>
         <button
           disabled={!name.trim()}
-          onClick={() =>
-            addCustomFood(name.trim(), grams, { kcal, protein, fat, carbs }, meal)
-          }
+          onClick={() => {
+            const cleanName = name.trim()
+            if (code.length >= 8) {
+              rememberLocalBarcode(code, {
+                name: cleanName,
+                kcal,
+                protein,
+                fat,
+                carbs,
+              })
+            }
+            void addCustomFood(cleanName, grams, { kcal, protein, fat, carbs }, meal)
+          }}
           className="h-14 w-full rounded-2xl bg-mint font-bold text-bg disabled:opacity-40"
         >
           Добавить

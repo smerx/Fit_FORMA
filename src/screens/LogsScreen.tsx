@@ -2,7 +2,7 @@ import { format, parseISO } from 'date-fns'
 import { ru } from 'date-fns/locale'
 import { useMemo, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { ChevronLeft, ScrollText } from 'lucide-react'
+import { Check, ChevronLeft, Copy, ScrollText } from 'lucide-react'
 import { useStore } from '../lib/store'
 import { formatClock, formatLongDate, shiftIso, todayIso } from '../lib/dates'
 import { mealLabel } from '../lib/labels'
@@ -53,9 +53,45 @@ export function LogsDock() {
   )
 }
 
+function periodLabel(n: Period): string {
+  if (n === 0) return 'всё время'
+  if (n === 1) return 'сегодня'
+  return `${n} дней`
+}
+
+function itemLine(item: LogItem): string {
+  const time = formatClock(item.at) || '—'
+  if (item.kind === 'food') {
+    const e = item.entry
+    return `${time} еда · ${mealLabel(e.meal)} · ${e.name} · ${e.grams} ${entryUnit(e.foodId)} · ${e.kcal} ккал · Б${Math.round(e.protein)} Ж${Math.round(e.fat)} У${Math.round(e.carbs)}`
+  }
+  if (item.kind === 'water') return `${time} вода · ${item.entry.ml} мл`
+  if (item.kind === 'activity') {
+    const e = item.entry
+    const note = e.note ? ` · заметка: ${e.note}` : ''
+    return `${time} тренировка · ${e.name} · ${e.minutes} мин · ${e.kcal} ккал${note}`
+  }
+  return `${time} вес · ${item.entry.weight.toFixed(1)} кг`
+}
+
+function buildAiText(groups: [string, LogItem[]][], period: Period): string {
+  const lines = [
+    `Дневник Форма — период: ${periodLabel(period)}`,
+    'Формат: время · тип · детали (удобно для разбора рациона и тренировок).',
+    '',
+  ]
+  for (const [date, rows] of groups) {
+    lines.push(formatLongDate(date))
+    for (const row of rows) lines.push(itemLine(row))
+    lines.push('')
+  }
+  return lines.join('\n').trim()
+}
+
 function LogsApp() {
   const { snapshot } = useStore()
   const [period, setPeriod] = useState<Period>(7)
+  const [copied, setCopied] = useState(false)
   const today = todayIso()
   const from = period === 0 ? '0000-01-01' : shiftIso(today, -(period - 1))
 
@@ -90,23 +126,41 @@ function LogsApp() {
     return [...map.entries()]
   }, [items])
 
+  async function copyAi() {
+    const text = buildAiText(groups, period)
+    try {
+      await navigator.clipboard.writeText(text || 'Записей за период нет.')
+      setCopied(true)
+      window.setTimeout(() => setCopied(false), 1600)
+    } catch {
+      setCopied(false)
+    }
+  }
+
   return (
     <div className="space-y-4 pb-8">
-      <p className="text-sm text-white/45">
-        Время — когда добавил запись. Период можно сузить.
-      </p>
-      <div className="flex gap-1 overflow-x-auto no-scrollbar">
-        {([1, 7, 14, 30, 0] as const).map((n) => (
-          <button
-            key={n}
-            onClick={() => setPeriod(n)}
-            className={`h-10 shrink-0 rounded-full px-3 text-sm font-semibold ${
-              period === n ? 'bg-mint text-bg' : 'bg-white/8 text-white/60'
-            }`}
-          >
-            {n === 0 ? 'Всё' : n === 1 ? 'Сегодня' : `${n} дн.`}
-          </button>
-        ))}
+      <div className="flex items-center gap-2">
+        <div className="flex min-w-0 flex-1 gap-1 overflow-x-auto no-scrollbar">
+          {([1, 7, 14, 30, 0] as const).map((n) => (
+            <button
+              key={n}
+              onClick={() => setPeriod(n)}
+              className={`h-9 shrink-0 rounded-full px-3 text-sm font-semibold ${
+                period === n ? 'bg-mint text-bg' : 'bg-white/8 text-white/60'
+              }`}
+            >
+              {n === 0 ? 'Всё' : n === 1 ? 'Сегодня' : `${n} дн.`}
+            </button>
+          ))}
+        </div>
+        <button
+          onClick={() => void copyAi()}
+          className="flex h-9 shrink-0 items-center gap-1 rounded-full bg-white/8 px-3 text-xs font-semibold text-mint"
+          title="Скопировать для ИИ"
+        >
+          {copied ? <Check size={14} /> : <Copy size={14} />}
+          {copied ? 'Ок' : 'ИИ'}
+        </button>
       </div>
       {groups.length === 0 && <p className="text-sm text-white/30">За этот период записей нет</p>}
       {groups.map(([date, rows]) => (

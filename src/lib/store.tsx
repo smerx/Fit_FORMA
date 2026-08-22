@@ -96,7 +96,7 @@ type Overlay =
   | { type: 'grams'; food: FoodItem; meal: MealType }
   | { type: 'activity'; activityId?: string }
   | { type: 'water' }
-  | { type: 'custom-food'; meal: MealType }
+  | { type: 'custom-food'; meal: MealType; draftName?: string; barcode?: string }
   | { type: 'weight' }
   | { type: 'profile' }
   | { type: 'barcode'; meal: MealType }

@@ -76,6 +76,7 @@ function loadLocal(): AppSnapshot {
       profile: parsed.profile ? withProfileDefaults(parsed.profile) : null,
       waterEntries: parsed.waterEntries ?? [],
       vitaminEntries: parsed.vitaminEntries ?? [],
+      activityEntries: (parsed.activityEntries ?? []).map((e) => ({ ...e, note: e.note ?? '' })),
       recentFoods,
       favoriteItems,
     }
@@ -90,9 +91,11 @@ function saveLocal(state: AppSnapshot) {
 
 type Overlay =
   | { type: 'none' }
+  | { type: 'add' }
   | { type: 'search'; meal: MealType }
   | { type: 'grams'; food: FoodItem; meal: MealType }
-  | { type: 'activity' }
+  | { type: 'activity'; activityId?: string }
+  | { type: 'water' }
   | { type: 'custom-food'; meal: MealType }
   | { type: 'weight' }
   | { type: 'profile' }
@@ -130,6 +133,7 @@ type Store = {
     name: string
     minutes: number
     met: number
+    note?: string
   }) => Promise<void>
   removeActivity: (id: string) => Promise<void>
   addWeightLog: (weight: number, date?: string) => Promise<void>
@@ -346,7 +350,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   )
 
   const addActivityEntry = useCallback(
-    async (input: { activityId: string; name: string; minutes: number; met: number }) => {
+    async (input: { activityId: string; name: string; minutes: number; met: number; note?: string }) => {
       const weight = snapshot.profile?.weightKg ?? 80
       const entry: ActivityEntry = {
         id: nid(),
@@ -356,6 +360,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         minutes: input.minutes,
         met: input.met,
         kcal: activityCalories(input.met, weight, input.minutes),
+        note: input.note?.trim() ?? '',
         createdAt: new Date().toISOString(),
       }
       commit({ ...snapshot, activityEntries: [...snapshot.activityEntries, entry] })
@@ -470,6 +475,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         createdAt: new Date().toISOString(),
       }
       commit({ ...snapshot, waterEntries: [...snapshot.waterEntries, entry] })
+      setOverlay({ type: 'none' })
       await runCloud(async () => {
         if (!user) return
         await insertWater(user.id, entry)

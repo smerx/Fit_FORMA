@@ -13,6 +13,7 @@ import { bmi, weeksToGoal } from '../lib/nutrition'
 import { formatLongDate } from '../lib/dates'
 import { weekReport } from '../lib/weekly'
 import { Sheet } from '../components/ui'
+import { LogsDock } from './LogsScreen'
 import { ToolsBoundary } from '../tools/error-boundary'
 import { ToolsDock } from '../tools/ToolsDock'
 import { TutorsDock } from '../tutors/TutorsDock'
@@ -153,6 +154,9 @@ export function ProgressScreen() {
           ))}
       </section>
 
+      <ToolsBoundary name="logs-dock">
+        <LogsDock />
+      </ToolsBoundary>
       <ToolsBoundary name="tutors-dock">
         <TutorsDock />
       </ToolsBoundary>

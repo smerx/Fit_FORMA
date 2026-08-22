@@ -47,6 +47,7 @@ export type ActivityEntry = {
   minutes: number
   met: number
   kcal: number
+  note: string
   createdAt: string
 }
 

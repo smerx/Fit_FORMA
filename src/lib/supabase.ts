@@ -65,6 +65,7 @@ type ActivityRow = {
   minutes: number
   met: number
   kcal: number
+  note?: string | null
   created_at: string
 }
 
@@ -141,6 +142,7 @@ export async function fetchSnapshot(userId: string): Promise<AppSnapshot | null>
       minutes: row.minutes,
       met: Number(row.met),
       kcal: Number(row.kcal),
+      note: row.note ?? '',
       createdAt: row.created_at,
     })),
     weightLogs: ((weightRes.data ?? []) as WeightRow[]).map((row) => ({
@@ -233,7 +235,7 @@ export async function deleteFoodRow(userId: string, id: string) {
 
 export async function insertActivity(userId: string, entry: ActivityEntry) {
   if (!supabase) return
-  const { error } = await supabase.from('activity_entries').insert({
+  const base = {
     id: entry.id,
     user_id: userId,
     logged_on: entry.date,
@@ -243,7 +245,10 @@ export async function insertActivity(userId: string, entry: ActivityEntry) {
     met: entry.met,
     kcal: entry.kcal,
     created_at: entry.createdAt,
-  })
+  }
+  const first = await supabase.from('activity_entries').insert({ ...base, note: entry.note || '' })
+  if (!first.error) return
+  const { error } = await supabase.from('activity_entries').insert(base)
   if (error) throw error
 }
 

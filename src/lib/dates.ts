@@ -23,6 +23,14 @@ export function formatWeekday(iso: string): string {
   return format(parseISO(iso), 'EEEE', { locale: ru })
 }
 
+export function formatClock(iso: string): string {
+  try {
+    return format(parseISO(iso), 'HH:mm')
+  } catch {
+    return ''
+  }
+}
+
 export function nid(): string {
   return crypto.randomUUID()
 }

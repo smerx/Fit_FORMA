@@ -5,6 +5,9 @@ import { FoodSearch } from './components/FoodSearch'
 import { GramSheet } from './components/GramSheet'
 import { CustomFoodSheet } from './components/CustomFoodSheet'
 import { BarcodeSheet } from './components/BarcodeSheet'
+import { AddSheet } from './components/AddSheet'
+import { WaterSheet } from './components/WaterSheet'
+import { ActivitySheet } from './components/ActivitySheet'
 import { TodayScreen } from './screens/TodayScreen'
 import { DiaryScreen } from './screens/DiaryScreen'
 import { ActivityScreen } from './screens/ActivityScreen'
@@ -50,10 +53,13 @@ export default function App() {
       {tab === 'diary' && <DiaryScreen />}
       {tab === 'activity' && <ActivityScreen />}
       {tab === 'progress' && <ProgressScreen />}
+      {overlay.type === 'add' && <AddSheet />}
       {overlay.type === 'search' && <FoodSearch />}
       {overlay.type === 'grams' && <GramSheet />}
       {overlay.type === 'custom-food' && <CustomFoodSheet />}
       {overlay.type === 'barcode' && <BarcodeSheet />}
+      {overlay.type === 'water' && <WaterSheet />}
+      {overlay.type === 'activity' && <ActivitySheet />}
       <WeightSheet />
       <ProfileSheet />
     </AppShell>

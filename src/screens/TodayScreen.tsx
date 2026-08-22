@@ -17,7 +17,7 @@ import { entryUnit } from '../lib/portions'
 import type { FoodItem } from '../types'
 
 export function TodayScreen() {
-  const { snapshot, date, setDate, setOverlay, setTab, addWater, removeWater, toggleVitamin, updateProfile } =
+  const { snapshot, date, setDate, setOverlay, setTab, toggleVitamin, updateProfile } =
     useStore()
   const profile = snapshot.profile
   const dismissed = useDismissedTips(date)
@@ -43,7 +43,6 @@ export function TodayScreen() {
     vitamins,
     dismissed: dismissed.ids,
   })
-  const waterPct = Math.min(100, Math.round((waterMl / Math.max(profile.waterGoalMl, 1)) * 100))
 
   return (
     <div className="space-y-4 pb-6">
@@ -104,33 +103,14 @@ export function TodayScreen() {
       )}
 
       <section className="rounded-3xl bg-card px-4 py-3">
-        <div className="flex items-center justify-between">
-          <div>
-            <div className="text-xs text-white/40">Вода</div>
-            <div className="text-xl font-extrabold tabular-nums">
-              {waterMl} <span className="text-sm font-semibold text-white/40">/ {profile.waterGoalMl} мл</span>
-            </div>
-          </div>
-          {waters.length > 0 && (
-            <button onClick={() => removeWater(waters.at(-1)!.id)} className="text-xs text-white/35">
-              − последний
-            </button>
-          )}
+        <div className="text-xs text-white/40">Вода</div>
+        <div className="text-xl font-extrabold tabular-nums">
+          {waters.length ? waterMl : profile.waterGoalMl}{' '}
+          <span className="text-sm font-semibold text-white/40">мл</span>
         </div>
-        <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/8">
-          <div className="h-full rounded-full bg-protein" style={{ width: `${waterPct}%` }} />
-        </div>
-        <div className="mt-3 flex gap-2">
-          {[250, 350, 500].map((ml) => (
-            <button
-              key={ml}
-              onClick={() => addWater(ml)}
-              className="h-11 flex-1 rounded-2xl bg-white/8 text-sm font-semibold"
-            >
-              +{ml} мл
-            </button>
-          ))}
-        </div>
+        <p className="mt-1 text-xs text-white/35">
+          {waters.length ? `${waterMl} мл записано` : `норма ${profile.waterGoalMl} мл`}
+        </p>
       </section>
 
       {profile.tracksVitamins && (

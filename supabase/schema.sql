@@ -43,6 +43,7 @@ create table if not exists public.activity_entries (
   minutes integer not null,
   met numeric not null,
   kcal numeric not null,
+  note text,
   created_at timestamptz not null default now()
 );
 
@@ -323,3 +324,5 @@ create policy "own tutor push subs" on public.tutor_push_subs
 drop policy if exists "own tutor reminders" on public.tutor_reminder_queue;
 create policy "own tutor reminders" on public.tutor_reminder_queue
   for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+
+alter table public.activity_entries add column if not exists note text;

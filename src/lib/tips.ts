@@ -24,13 +24,12 @@ export function pickHealthTip(input: TipInput): HealthTip | null {
 }
 
 function buildTips(input: TipInput): HealthTip[] {
-  const { profile, date, foods, waterMl, vitamins } = input
+  const { profile, date, foods, vitamins } = input
   const hour = date === todayIso() ? new Date().getHours() : 20
   const eaten = sumFood(foods)
   const target = dailyCalorieTarget(profile)
   const proteinNeed = proteinTargetG(profile)
   const fatNeed = fatFloorG(profile)
-  const waterGoal = profile.waterGoalMl
   const out: HealthTip[] = []
 
   if (hour >= 13 && foods.length === 0) {
@@ -40,16 +39,6 @@ function buildTips(input: TipInput): HealthTip[] {
       why: 'Если есть, а в дневнике пусто, цифры «осталось» врут. И наоборот: если реально голодаешь до обеда, мозг и тренировки это чувствуют.',
       fact: 'Мозг почти целиком на глюкозе. Долгий голод без еды даёт туман в голове и срывы вечером — не «силу воли сломало», а физиологию.',
       tone: 'info',
-    })
-  }
-
-  if (hour >= 16 && waterMl < waterGoal * 0.4) {
-    out.push({
-      id: 'water-low',
-      title: 'Воды мало',
-      why: `Сейчас ${waterMl} мл при ориентире ${waterGoal} мл. Это не «кости сломаются сегодня», но кровь гуще, хуже концентрация и чаще запоры.`,
-      fact: 'Даже 1–2% потери воды от веса тела уже бьют по вниманию и выносливости. Почки и кишечник работают лучше, когда есть чем «промыть» систему.',
-      tone: 'warn',
     })
   }
 
@@ -93,12 +82,12 @@ function buildTips(input: TipInput): HealthTip[] {
     })
   }
 
-  if (waterMl >= waterGoal && eaten.protein >= proteinNeed * 0.9) {
+  if (eaten.kcal > 400 && eaten.protein >= proteinNeed * 0.9) {
     out.push({
       id: 'good-day',
-      title: 'Белок и вода на месте',
-      why: 'Так дефицит переносится спокойнее: меньше отёков «из жажды», лучше сытость, мышцы не первые в очереди на сжигание.',
-      fact: 'Вода не смывает жир. Но без неё хуже работает кишечник, и весы врут из‑за отёка. Белок + вода — скучная база, которая реально держит форму.',
+      title: 'Белок на месте',
+      why: 'Так дефицит переносится спокойнее: лучше сытость, мышцы не первые в очереди на сжигание.',
+      fact: 'Белок держит мышечную массу. 1.6 г/кг — рабочая норма, пока худеешь.',
       tone: 'good',
     })
   }

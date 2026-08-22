@@ -1,7 +1,6 @@
 import type { TutorEvent, TutorLesson, TutorStudent } from './types'
 import { dayRows } from './money'
 import { nid, shiftIso, todayIso } from '../lib/dates'
-import { supabase } from '../lib/supabase'
 import { replaceReminderQueue, upsertPushSub } from './cloud'
 
 export type UpcomingLesson = {

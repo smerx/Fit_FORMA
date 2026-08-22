@@ -219,7 +219,7 @@ export function packEntriesForPayment(s: TutorStudent, lessons: TutorLesson[], t
 }
 
 export function paymentText(s: TutorStudent, lines: PayLine[], payDetails: string): string {
-  const multi = lines.some((d, i, arr) => arr.filter((x) => x.date === d.date).length > 1)
+  const multi = lines.some((d, _i, arr) => arr.filter((x) => x.date === d.date).length > 1)
   const rows = lines.map((d, i) => {
     const time = multi && d.timeHm ? ` ${d.timeHm}` : ''
     return `${i + 1}) ${format(parseISO(d.date), 'dd.MM')}${time}${d.skipped ? ' (п.б.ув.пр)' : ''}`

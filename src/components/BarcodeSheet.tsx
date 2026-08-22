@@ -5,71 +5,26 @@ import { Sheet } from './ui'
 
 type Caps = {
   focusMode?: string[]
-  zoom?: { min: number; max: number; step?: number }
 }
 
-async function tuneCamera(track: MediaStreamTrack) {
+/** Один раз при старте — continuous AF, без зума и без лишних constraint-циклов. */
+async function initCamera(track: MediaStreamTrack) {
   const caps = (track.getCapabilities?.() ?? {}) as Caps
-  const advanced: MediaTrackConstraintSet[] = []
-
-  if (caps.focusMode?.includes('continuous')) {
-    advanced.push({ focusMode: 'continuous' } as MediaTrackConstraintSet)
-  } else if (caps.focusMode?.includes('single-shot')) {
-    advanced.push({ focusMode: 'single-shot' } as MediaTrackConstraintSet)
-  }
-
-  // Лёгкий зум часто заставляет AF поймать штрихкод на телефоне
-  if (caps.zoom) {
-    const { min, max } = caps.zoom
-    const target = Math.min(max, Math.max(min, min + (max - min) * 0.2))
-    if (Number.isFinite(target) && target > min) {
-      advanced.push({ zoom: target } as MediaTrackConstraintSet)
-    }
-  }
-
   try {
-    if (advanced.length) await track.applyConstraints({ advanced })
+    if (caps.focusMode?.includes('continuous')) {
+      await track.applyConstraints({ advanced: [{ focusMode: 'continuous' } as MediaTrackConstraintSet] })
+    }
   } catch {
     /* устройство не умеет */
   }
-
-  try {
-    await track.applyConstraints({
-      width: { ideal: 1920 },
-      height: { ideal: 1080 },
-      frameRate: { ideal: 30 },
-    })
-  } catch {
-    /* ignore */
-  }
 }
 
-async function pulseFocus(track: MediaStreamTrack) {
+/** Только по тапу: один single-shot, без снимка — takePhoto() вешает превью на Samsung. */
+async function tapRefocus(track: MediaStreamTrack) {
   const caps = (track.getCapabilities?.() ?? {}) as Caps
+  if (!caps.focusMode?.includes('single-shot')) return
   try {
-    if (caps.focusMode?.includes('single-shot')) {
-      await track.applyConstraints({
-        advanced: [{ focusMode: 'single-shot' } as MediaTrackConstraintSet],
-      })
-      return
-    }
-    if (caps.focusMode?.includes('continuous')) {
-      await track.applyConstraints({
-        advanced: [{ focusMode: 'continuous' } as MediaTrackConstraintSet],
-      })
-      return
-    }
-  } catch {
-    /* ignore */
-  }
-  // ImageCapture иногда дергает AF, даже если focusMode нет в capabilities
-  try {
-    const IC = (window as unknown as { ImageCapture?: new (t: MediaStreamTrack) => { takePhoto: () => Promise<Blob> } })
-      .ImageCapture
-    if (IC) {
-      const shot = new IC(track)
-      await shot.takePhoto().catch(() => null)
-    }
+    await track.applyConstraints({ advanced: [{ focusMode: 'single-shot' } as MediaTrackConstraintSet] })
   } catch {
     /* ignore */
   }
@@ -87,16 +42,19 @@ const DETECT_FORMATS = [
   'itf',
 ] as const
 
+const SCAN_MS = 280
+
 export function BarcodeSheet() {
   const { overlay, setOverlay } = useStore()
   const videoRef = useRef<HTMLVideoElement>(null)
   const trackRef = useRef<MediaStreamTrack | null>(null)
   const lockedRef = useRef(false)
+  const focusingRef = useRef(false)
   const [manual, setManual] = useState('')
   const [lastCode, setLastCode] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
-  const [hint, setHint] = useState('Наведи на штрихкод, тапни по кадру для фокуса')
+  const [hint, setHint] = useState('Держи штрихкод в рамке · тап — перефокус')
   const meal = overlay.type === 'barcode' ? overlay.meal : 'lunch'
 
   useEffect(() => {
@@ -106,8 +64,7 @@ export function BarcodeSheet() {
     const node = video
     let stop = false
     let stream: MediaStream | null = null
-    let raf = 0
-    let focusTimer = 0
+    let scanTimer = 0
     lockedRef.current = false
     setError(null)
     setBusy(false)
@@ -137,9 +94,9 @@ export function BarcodeSheet() {
         const constraints: MediaStreamConstraints = {
           video: {
             facingMode: { ideal: 'environment' },
-            width: { ideal: 1920 },
-            height: { ideal: 1080 },
-            frameRate: { ideal: 30 },
+            width: { ideal: 1280 },
+            height: { ideal: 720 },
+            frameRate: { ideal: 30, max: 30 },
           },
           audio: false,
         }
@@ -157,16 +114,10 @@ export function BarcodeSheet() {
         }
         const track = stream.getVideoTracks()[0] ?? null
         trackRef.current = track
-        if (track) {
-          await tuneCamera(track)
-          await pulseFocus(track)
-          focusTimer = window.setInterval(() => {
-            if (trackRef.current && !lockedRef.current) void pulseFocus(trackRef.current)
-          }, 1800)
-        }
+        if (track) await initCamera(track)
+
         node.srcObject = stream
         await node.play()
-        setHint('Тапни по кадру — перефокус · зум чуть подкручен')
 
         const Detector = window.BarcodeDetector
         if (!Detector) {
@@ -186,23 +137,25 @@ export function BarcodeSheet() {
         }
 
         const detector = new Detector({ formats })
-        const tick = async () => {
-          if (stop || !videoRef.current || lockedRef.current) return
+        let scanning = false
+
+        const scan = async () => {
+          if (stop || scanning || lockedRef.current || !videoRef.current) return
+          scanning = true
           try {
             const codes = await detector.detect(videoRef.current)
             const value = codes[0]?.rawValue
-            if (value) {
-              await resolveCode(value)
-              return
-            }
+            if (value) await resolveCode(value)
           } catch {
             /* кадр ещё не готов */
+          } finally {
+            scanning = false
           }
-          raf = requestAnimationFrame(() => {
-            void tick()
-          })
         }
-        void tick()
+
+        scanTimer = window.setInterval(() => {
+          void scan()
+        }, SCAN_MS)
       } catch {
         setError('Нет доступа к камере. Разреши её в Chrome или введи код с пачки.')
       }
@@ -211,8 +164,7 @@ export function BarcodeSheet() {
     void start()
     return () => {
       stop = true
-      cancelAnimationFrame(raf)
-      window.clearInterval(focusTimer)
+      window.clearInterval(scanTimer)
       stream?.getTracks().forEach((t) => t.stop())
       trackRef.current = null
       if (node.srcObject) node.srcObject = null
@@ -221,10 +173,14 @@ export function BarcodeSheet() {
 
   async function tapFocus() {
     const track = trackRef.current
-    if (!track) return
-    setHint('Фокусирую…')
-    await pulseFocus(track)
-    setHint('Держи штрихкод ровнее и ближе к рамке')
+    if (!track || focusingRef.current) return
+    focusingRef.current = true
+    setHint('Фокус…')
+    await tapRefocus(track)
+    window.setTimeout(() => {
+      focusingRef.current = false
+      setHint('Держи штрихкод в рамке · тап — перефокус')
+    }, 400)
   }
 
   if (overlay.type !== 'barcode') return null

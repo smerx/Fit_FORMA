@@ -5,6 +5,7 @@ import { searchOpenFoodFacts } from '../lib/off'
 import { useStore } from '../lib/store'
 import type { FoodItem, MealType } from '../types'
 import { MEALS } from '../lib/labels'
+import { formatDayTitle } from '../lib/dates'
 import { portionUnit } from '../lib/portions'
 import { FoodThumb, FormBadge, Sheet } from './ui'
 
@@ -48,6 +49,8 @@ export function FoodSearch() {
   const { overlay, setOverlay, snapshot, toggleFavorite } = useStore()
   const [q, setQ] = useState('')
   const [meal, setMeal] = useState<MealType>(overlay.type === 'search' ? overlay.meal : 'lunch')
+  const date = overlay.type === 'search' ? overlay.date : ''
+  const followToday = overlay.type === 'search' ? overlay.followToday : false
   const [off, setOff] = useState<FoodItem[]>([])
   const [offLoading, setOffLoading] = useState(false)
 
@@ -78,10 +81,12 @@ export function FoodSearch() {
     }
   }, [q])
 
-  const pick = (food: FoodItem) => setOverlay({ type: 'grams', food, meal })
+  const pick = (food: FoodItem) => setOverlay({ type: 'grams', food, meal, date, followToday })
+
+  if (overlay.type !== 'search') return null
 
   return (
-    <Sheet title="Продукт" onClose={() => setOverlay({ type: 'none' })}>
+    <Sheet title={`Продукт · ${formatDayTitle(date)}`} onClose={() => setOverlay({ type: 'none' })}>
       <div className="mb-3 flex gap-2 overflow-x-auto no-scrollbar">
         {MEALS.map((m) => (
           <button
@@ -106,7 +111,7 @@ export function FoodSearch() {
         />
         <button
           type="button"
-          onClick={() => setOverlay({ type: 'barcode', meal })}
+          onClick={() => setOverlay({ type: 'barcode', meal, date, followToday })}
           className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-white/8"
           aria-label="Штрихкод"
         >
@@ -186,7 +191,7 @@ export function FoodSearch() {
       )}
 
       <button
-        onClick={() => setOverlay({ type: 'custom-food', meal })}
+        onClick={() => setOverlay({ type: 'custom-food', meal, date, followToday })}
         className="mt-4 flex h-12 w-full items-center justify-center gap-2 rounded-2xl bg-white/8 font-semibold"
       >
         <PencilLine size={18} /> Свой продукт

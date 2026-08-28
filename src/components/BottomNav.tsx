@@ -1,6 +1,7 @@
 import { Activity, BookOpen, Plus, TrendingUp, Utensils } from 'lucide-react'
 import type { TabId } from '../types'
 import { useStore } from '../lib/store'
+import { todayIso } from '../lib/dates'
 
 const items: { id: TabId | 'add'; label: string; icon: typeof Utensils }[] = [
   { id: 'today', label: 'Сегодня', icon: Utensils },
@@ -22,7 +23,7 @@ export function BottomNav() {
           return (
             <button
               key={item.id}
-              onClick={() => setOverlay({ type: 'add' })}
+              onClick={() => setOverlay({ type: 'add', date: todayIso(), followToday: true })}
               className="-mt-5 flex flex-col items-center gap-1"
             >
               <span className="flex h-14 w-14 items-center justify-center rounded-full bg-mint text-bg shadow-[0_8px_24px_rgba(61,220,151,0.35)]">

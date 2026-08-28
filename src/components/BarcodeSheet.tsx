@@ -56,6 +56,8 @@ export function BarcodeSheet() {
   const [busy, setBusy] = useState(false)
   const [hint, setHint] = useState('Держи штрихкод в рамке · тап — перефокус')
   const meal = overlay.type === 'barcode' ? overlay.meal : 'lunch'
+  const date = overlay.type === 'barcode' ? overlay.date : ''
+  const followToday = overlay.type === 'barcode' ? overlay.followToday : false
 
   useEffect(() => {
     if (overlay.type !== 'barcode') return
@@ -86,7 +88,7 @@ export function BarcodeSheet() {
         lockedRef.current = false
         return
       }
-      setOverlay({ type: 'grams', food, meal })
+      setOverlay({ type: 'grams', food, meal, date, followToday })
     }
 
     async function start() {
@@ -169,7 +171,7 @@ export function BarcodeSheet() {
       trackRef.current = null
       if (node.srcObject) node.srcObject = null
     }
-  }, [overlay.type, meal, setOverlay])
+  }, [overlay.type, meal, date, followToday, setOverlay])
 
   async function tapFocus() {
     const track = trackRef.current
@@ -188,7 +190,10 @@ export function BarcodeSheet() {
   const codeForCustom = (manual.replace(/\D/g, '') || lastCode.replace(/\D/g, '')).slice(0, 14)
 
   return (
-    <Sheet title="Штрихкод" onClose={() => setOverlay({ type: 'search', meal })}>
+    <Sheet
+      title="Штрихкод"
+      onClose={() => setOverlay({ type: 'search', meal, date, followToday })}
+    >
       <button type="button" onClick={() => void tapFocus()} className="relative block w-full overflow-hidden rounded-3xl bg-black">
         <video ref={videoRef} className="h-64 w-full object-cover" playsInline muted autoPlay />
         <span className="pointer-events-none absolute inset-x-8 top-1/2 h-16 -translate-y-1/2 rounded-xl border border-mint/50" />
@@ -221,7 +226,7 @@ export function BarcodeSheet() {
             setBusy(false)
             return
           }
-          setOverlay({ type: 'grams', food, meal })
+          setOverlay({ type: 'grams', food, meal, date, followToday })
         }}
         className="mt-3 h-12 w-full rounded-2xl bg-mint font-bold text-bg disabled:opacity-40"
       >
@@ -233,6 +238,8 @@ export function BarcodeSheet() {
             setOverlay({
               type: 'custom-food',
               meal,
+              date,
+              followToday,
               barcode: codeForCustom || undefined,
               draftName: '',
             })

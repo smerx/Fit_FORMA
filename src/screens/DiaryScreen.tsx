@@ -32,7 +32,7 @@ export function DiaryScreen() {
           </button>
         </div>
         <button
-          onClick={() => copyYesterday()}
+          onClick={() => copyYesterday(date)}
           className="flex h-11 items-center gap-1 rounded-full bg-white/8 px-3 text-sm"
         >
           <Copy size={14} /> Вчера
@@ -56,7 +56,9 @@ export function DiaryScreen() {
               <div className="flex items-center gap-2">
                 <span className="text-sm text-white/40">{kcal} ккал</span>
                 <button
-                  onClick={() => setOverlay({ type: 'search', meal: meal.id })}
+                  onClick={() =>
+                    setOverlay({ type: 'search', meal: meal.id, date, followToday: date === todayIso() })
+                  }
                   className="flex h-9 items-center rounded-full bg-mint/15 px-3 text-sm font-semibold text-mint"
                 >
                   +

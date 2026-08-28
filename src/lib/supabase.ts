@@ -193,7 +193,7 @@ export async function upsertProfile(userId: string, profile: Profile) {
     updated_at: new Date().toISOString(),
   })
   if (error) throw error
-  await supabase
+  const { error: settingsError } = await supabase
     .from('profiles')
     .update({
       tips_enabled: profile.tipsEnabled,
@@ -202,11 +202,12 @@ export async function upsertProfile(userId: string, profile: Profile) {
       vitamin_name: profile.vitaminName,
     })
     .eq('id', userId)
+  if (settingsError) throw settingsError
 }
 
 export async function insertFood(userId: string, entry: FoodEntry) {
   if (!supabase) return
-  const { error } = await supabase.from('food_entries').insert({
+  const { error } = await supabase.from('food_entries').upsert({
     id: entry.id,
     user_id: userId,
     logged_on: entry.date,
@@ -246,9 +247,9 @@ export async function insertActivity(userId: string, entry: ActivityEntry) {
     kcal: entry.kcal,
     created_at: entry.createdAt,
   }
-  const first = await supabase.from('activity_entries').insert({ ...base, note: entry.note || '' })
+  const first = await supabase.from('activity_entries').upsert({ ...base, note: entry.note || '' })
   if (!first.error) return
-  const { error } = await supabase.from('activity_entries').insert(base)
+  const { error } = await supabase.from('activity_entries').upsert(base)
   if (error) throw error
 }
 
@@ -260,7 +261,7 @@ export async function deleteActivityRow(userId: string, id: string) {
 
 export async function insertWeight(userId: string, entry: WeightLog) {
   if (!supabase) return
-  const { error } = await supabase.from('weight_logs').insert({
+  const { error } = await supabase.from('weight_logs').upsert({
     id: entry.id,
     user_id: userId,
     logged_on: entry.date,
@@ -296,7 +297,7 @@ export async function setFavorite(userId: string, foodKey: string, on: boolean) 
 
 export async function insertWater(userId: string, entry: WaterEntry) {
   if (!supabase) return
-  const { error } = await supabase.from('water_entries').insert({
+  const { error } = await supabase.from('water_entries').upsert({
     id: entry.id,
     user_id: userId,
     logged_on: entry.date,
@@ -314,7 +315,7 @@ export async function deleteWaterRow(userId: string, id: string) {
 
 export async function insertVitamin(userId: string, entry: VitaminEntry) {
   if (!supabase) return
-  const { error } = await supabase.from('vitamin_entries').insert({
+  const { error } = await supabase.from('vitamin_entries').upsert({
     id: entry.id,
     user_id: userId,
     logged_on: entry.date,

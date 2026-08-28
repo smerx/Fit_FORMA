@@ -1,32 +1,35 @@
 import type { ReactNode } from 'react'
 import { Droplets, Dumbbell, Utensils } from 'lucide-react'
 import { useStore } from '../lib/store'
+import { formatDayTitle } from '../lib/dates'
 import { Sheet } from './ui'
 
 export function AddSheet() {
   const { overlay, setOverlay } = useStore()
   if (overlay.type !== 'add') return null
+  const date = overlay.date
+  const followToday = overlay.followToday
 
   return (
-    <Sheet title="Добавить" onClose={() => setOverlay({ type: 'none' })}>
+    <Sheet title={`Добавить · ${formatDayTitle(date)}`} onClose={() => setOverlay({ type: 'none' })}>
       <div className="space-y-2">
         <Choice
           icon={<Utensils size={20} />}
           title="Еда"
           sub="Поиск, граммовка, своё блюдо"
-          onClick={() => setOverlay({ type: 'search', meal: 'lunch' })}
+          onClick={() => setOverlay({ type: 'search', meal: 'lunch', date, followToday })}
         />
         <Choice
           icon={<Droplets size={20} />}
           title="Вода"
           sub="250, 350, 500 мл или своё"
-          onClick={() => setOverlay({ type: 'water' })}
+          onClick={() => setOverlay({ type: 'water', date, followToday })}
         />
         <Choice
           icon={<Dumbbell size={20} />}
           title="Активность"
           sub="Минуты, ккал, заметка к тренировке"
-          onClick={() => setOverlay({ type: 'activity' })}
+          onClick={() => setOverlay({ type: 'activity', date, followToday })}
         />
       </div>
     </Sheet>

@@ -10,7 +10,7 @@ import {
 } from 'recharts'
 import { useStore } from '../lib/store'
 import { bmi, weeksToGoal } from '../lib/nutrition'
-import { formatLongDate } from '../lib/dates'
+import { formatLongDate, shiftIso, todayIso } from '../lib/dates'
 import { weekReport } from '../lib/weekly'
 import { Sheet } from '../components/ui'
 import { LogsDock } from './LogsScreen'
@@ -54,7 +54,7 @@ export function ProgressScreen() {
       <header className="flex items-center justify-between">
         <h1 className="text-2xl font-extrabold">Прогресс</h1>
         <button
-          onClick={() => setOverlay({ type: 'weight' })}
+          onClick={() => setOverlay({ type: 'weight', date, followToday: true })}
           className="h-11 rounded-full bg-mint px-4 font-bold text-bg"
         >
           Вес
@@ -168,7 +168,7 @@ export function ProgressScreen() {
 }
 
 export function WeightSheet() {
-  const { overlay, setOverlay, snapshot, addWeightLog, date } = useStore()
+  const { overlay, setOverlay, snapshot, addWeightLog } = useStore()
   const current = snapshot.profile?.weightKg ?? 80
   const [weight, setWeight] = useState(current)
 
@@ -177,6 +177,7 @@ export function WeightSheet() {
   }, [overlay.type, snapshot.profile?.weightKg])
 
   if (overlay.type !== 'weight') return null
+  const date = overlay.date
 
   return (
     <Sheet title="Записать вес" onClose={() => setOverlay({ type: 'none' })}>
@@ -247,9 +248,7 @@ function deltaSince(
   last: number,
 ): number {
   if (!logs.length) return 0
-  const cutoff = new Date()
-  cutoff.setDate(cutoff.getDate() - days)
-  const iso = cutoff.toISOString().slice(0, 10)
+  const iso = shiftIso(todayIso(), -days)
   const prev = [...logs].reverse().find((l) => l.date <= iso) ?? logs[0]
   return last - prev.weight
 }

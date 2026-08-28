@@ -24,7 +24,7 @@ export function ActivityScreen() {
         {ACTIVITIES.map((a) => (
           <button
             key={a.id}
-            onClick={() => setOverlay({ type: 'activity', activityId: a.id })}
+            onClick={() => setOverlay({ type: 'activity', activityId: a.id, date, followToday: true })}
             className="flex items-center gap-3 rounded-3xl bg-card px-4 py-3 text-left"
           >
             <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white/8 text-2xl">

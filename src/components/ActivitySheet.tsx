@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { ACTIVITIES } from '../data/activities'
 import { useStore } from '../lib/store'
 import { activityCalories } from '../lib/nutrition'
+import { formatDayTitle } from '../lib/dates'
 import { Sheet } from './ui'
 import type { ActivityTemplate } from '../types'
 
@@ -29,6 +30,7 @@ export function ActivitySheet() {
   }, [overlay])
 
   if (overlay.type !== 'activity') return null
+  const date = overlay.date
 
   const save = () => {
     if (!picked) return
@@ -38,12 +40,13 @@ export function ActivitySheet() {
       minutes,
       met: picked.custom ? customMet : picked.met,
       note,
+      date,
     })
   }
 
   if (!picked) {
     return (
-      <Sheet title="Активность" onClose={() => setOverlay({ type: 'none' })}>
+      <Sheet title={`Активность · ${formatDayTitle(date)}`} onClose={() => setOverlay({ type: 'none' })}>
         <div className="space-y-2">
           {ACTIVITIES.map((a) => (
             <button
@@ -71,7 +74,7 @@ export function ActivitySheet() {
   }
 
   return (
-    <Sheet title={picked.name} onClose={() => setOverlay({ type: 'none' })}>
+    <Sheet title={`${picked.name} · ${formatDayTitle(date)}`} onClose={() => setOverlay({ type: 'none' })}>
       {picked.custom && (
         <div className="mb-3 space-y-3">
           <label className="block">

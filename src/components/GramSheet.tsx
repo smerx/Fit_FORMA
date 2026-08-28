@@ -3,6 +3,7 @@ import { Star } from 'lucide-react'
 import { useStore } from '../lib/store'
 import { macrosForGrams } from '../lib/nutrition'
 import { formHint } from '../lib/labels'
+import { formatDayTitle } from '../lib/dates'
 import { defaultPortionGrams, portionPresets, portionUnit } from '../lib/portions'
 import { FoodThumb, FormBadge, Sheet } from './ui'
 
@@ -10,6 +11,8 @@ export function GramSheet() {
   const { overlay, setOverlay, addFood, snapshot, toggleFavorite } = useStore()
   const food = overlay.type === 'grams' ? overlay.food : null
   const meal = overlay.type === 'grams' ? overlay.meal : 'lunch'
+  const date = overlay.type === 'grams' ? overlay.date : ''
+  const followToday = overlay.type === 'grams' ? overlay.followToday : false
   const unit = food ? portionUnit(food) : 'г'
   const presets = food ? portionPresets(food) : []
   const [grams, setGrams] = useState(100)
@@ -18,12 +21,15 @@ export function GramSheet() {
 
   useEffect(() => {
     if (food) setGrams(defaultPortionGrams(food))
-  }, [food?.id])
+  }, [food])
 
   if (overlay.type !== 'grams' || !food || !macros) return null
 
   return (
-    <Sheet title={unit === 'мл' ? 'Объём' : 'Граммовка'} onClose={() => setOverlay({ type: 'search', meal })}>
+    <Sheet
+      title={`${unit === 'мл' ? 'Объём' : 'Граммовка'} · ${formatDayTitle(date)}`}
+      onClose={() => setOverlay({ type: 'search', meal, date, followToday })}
+    >
       <div className="mb-4 flex items-center gap-3">
         <FoodThumb food={food} size={64} />
         <div className="min-w-0 flex-1">
@@ -93,10 +99,10 @@ export function GramSheet() {
       </div>
 
       <button
-        onClick={() => addFood(food, grams, meal)}
+        onClick={() => addFood(food, grams, meal, date)}
         className="h-14 w-full rounded-2xl bg-mint text-base font-bold text-bg"
       >
-        Добавить в дневник
+        Добавить за {formatDayTitle(date).toLowerCase()}
       </button>
     </Sheet>
   )

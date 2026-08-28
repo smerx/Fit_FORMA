@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useStore } from '../lib/store'
+import { formatDayTitle } from '../lib/dates'
 import { Sheet } from './ui'
 
 const PRESETS = [250, 350, 500, 750]
@@ -8,9 +9,10 @@ export function WaterSheet() {
   const { overlay, setOverlay, addWater } = useStore()
   const [ml, setMl] = useState(250)
   if (overlay.type !== 'water') return null
+  const date = overlay.date
 
   return (
-    <Sheet title="Вода" onClose={() => setOverlay({ type: 'none' })}>
+    <Sheet title={`Вода · ${formatDayTitle(date)}`} onClose={() => setOverlay({ type: 'none' })}>
       <div className="flex items-end gap-2">
         <input
           type="number"
@@ -35,7 +37,7 @@ export function WaterSheet() {
         ))}
       </div>
       <button
-        onClick={() => void addWater(ml)}
+        onClick={() => void addWater(ml, date)}
         className="mt-6 h-14 w-full rounded-2xl bg-mint font-bold text-bg"
       >
         Записать

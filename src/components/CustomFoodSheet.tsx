@@ -1,12 +1,15 @@
 import { useEffect, useState } from 'react'
 import { useStore } from '../lib/store'
 import { rememberLocalBarcode } from '../data/barcodes-local'
+import { formatDayTitle } from '../lib/dates'
 import { Sheet } from './ui'
 
 export function CustomFoodSheet() {
   const { overlay, setOverlay, addCustomFood } = useStore()
   const draft = overlay.type === 'custom-food' ? overlay.draftName ?? '' : ''
   const barcode = overlay.type === 'custom-food' ? overlay.barcode ?? '' : ''
+  const date = overlay.type === 'custom-food' ? overlay.date : ''
+  const followToday = overlay.type === 'custom-food' ? overlay.followToday : false
   const [name, setName] = useState(draft)
   const [grams, setGrams] = useState(100)
   const [kcal, setKcal] = useState(100)
@@ -23,7 +26,10 @@ export function CustomFoodSheet() {
   const code = (barcode || name.match(/Код\s+(\d{8,14})/i)?.[1] || '').replace(/\D/g, '')
 
   return (
-    <Sheet title="Свой продукт" onClose={() => setOverlay({ type: 'search', meal })}>
+    <Sheet
+      title={`Свой продукт · ${formatDayTitle(date)}`}
+      onClose={() => setOverlay({ type: 'search', meal, date, followToday })}
+    >
       <div className="space-y-3">
         {code ? (
           <p className="rounded-2xl bg-white/5 px-3 py-2 text-xs text-white/45">
@@ -51,7 +57,7 @@ export function CustomFoodSheet() {
                 carbs,
               })
             }
-            void addCustomFood(cleanName, grams, { kcal, protein, fat, carbs }, meal)
+            void addCustomFood(cleanName, grams, { kcal, protein, fat, carbs }, meal, date)
           }}
           className="h-14 w-full rounded-2xl bg-mint font-bold text-bg disabled:opacity-40"
         >

@@ -115,7 +115,7 @@ export function TodayScreen() {
 
       {profile.tracksVitamins && (
         <button
-          onClick={() => toggleVitamin()}
+          onClick={() => toggleVitamin(date)}
           className="flex w-full items-center justify-between rounded-3xl bg-card px-4 py-4 text-left"
         >
           <div>
@@ -135,7 +135,7 @@ export function TodayScreen() {
       )}
 
       <button
-        onClick={() => setOverlay({ type: 'weight' })}
+        onClick={() => setOverlay({ type: 'weight', date, followToday: date === todayIso() })}
         className="flex w-full items-center justify-between rounded-3xl bg-card px-4 py-4"
       >
         <div>
@@ -155,7 +155,9 @@ export function TodayScreen() {
           return (
             <button
               key={meal.id}
-              onClick={() => setOverlay({ type: 'search', meal: meal.id })}
+              onClick={() =>
+                setOverlay({ type: 'search', meal: meal.id, date, followToday: date === todayIso() })
+              }
               className="w-full rounded-3xl bg-card px-4 py-3 text-left"
             >
               <div className="flex items-center justify-between">

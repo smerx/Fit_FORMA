@@ -12,7 +12,7 @@ import { useStore } from '../lib/store'
 import { bmi, weeksToGoal } from '../lib/nutrition'
 import { formatLongDate, shiftIso, todayIso } from '../lib/dates'
 import { weekReport } from '../lib/weekly'
-import { Sheet } from '../components/ui'
+import { NumericInput, Sheet } from '../components/ui'
 import { LogsDock } from './LogsScreen'
 import { ToolsBoundary } from '../tools/error-boundary'
 import { ToolsDock } from '../tools/ToolsDock'
@@ -182,11 +182,11 @@ export function WeightSheet() {
   return (
     <Sheet title="Записать вес" onClose={() => setOverlay({ type: 'none' })}>
       <div className="flex items-end gap-2">
-        <input
-          type="number"
-          step="0.1"
+        <NumericInput
           value={weight}
-          onChange={(e) => setWeight(Number(e.target.value) || 0)}
+          min={30}
+          max={300}
+          onChange={setWeight}
           className="w-36 bg-transparent text-5xl font-extrabold outline-none"
         />
         <span className="pb-2 text-white/40">кг</span>

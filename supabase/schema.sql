@@ -224,6 +224,7 @@ create table if not exists public.tutor_students (
   time_hm text not null default '16:00',
   schedule jsonb,
   active boolean not null default true,
+  paid boolean not null default false,
   pack_started_on date,
   note text,
   sort_order integer not null default 0,
@@ -263,6 +264,7 @@ alter table public.tutor_settings add column if not exists reminders_on boolean 
 alter table public.tutor_settings add column if not exists pay_details text not null default '89041237534 Сбербанк, Дмитрий Андреевич.';
 alter table public.tutor_students add column if not exists schedule jsonb;
 alter table public.tutor_students add column if not exists sort_order integer not null default 0;
+alter table public.tutor_students add column if not exists paid boolean not null default false;
 
 create table if not exists public.tutor_events (
   id uuid primary key,

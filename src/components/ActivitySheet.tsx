@@ -3,7 +3,7 @@ import { ACTIVITIES } from '../data/activities'
 import { useStore } from '../lib/store'
 import { activityCalories } from '../lib/nutrition'
 import { formatDayTitle } from '../lib/dates'
-import { Sheet } from './ui'
+import { NumericInput, Sheet } from './ui'
 import type { ActivityTemplate } from '../types'
 
 export function ActivitySheet() {
@@ -87,11 +87,10 @@ export function ActivitySheet() {
           </label>
           <label className="block">
             <span className="mb-1 block text-xs text-white/45">MET</span>
-            <input
-              type="number"
-              step="0.1"
+            <NumericInput
               value={customMet}
-              onChange={(e) => setCustomMet(Number(e.target.value) || 1)}
+              min={1}
+              onChange={setCustomMet}
               className="h-12 w-full rounded-2xl bg-white/8 px-3 outline-none"
             />
           </label>
@@ -99,10 +98,10 @@ export function ActivitySheet() {
       )}
       <div className="mb-2 text-sm text-white/45">Минуты</div>
       <div className="flex items-end gap-2">
-        <input
-          type="number"
+        <NumericInput
           value={minutes}
-          onChange={(e) => setMinutes(Math.max(1, Number(e.target.value) || 1))}
+          min={1}
+          onChange={setMinutes}
           className="w-28 bg-transparent text-5xl font-extrabold outline-none"
         />
         <span className="pb-2 text-white/40">мин</span>

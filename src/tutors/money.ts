@@ -60,6 +60,7 @@ export function hydrateStudent(raw: Partial<TutorStudent> & { slots?: TutorSlot[
     weekdays: slots.map((x) => x.weekday),
     timeHm: slots[0]?.timeHm ?? raw.timeHm ?? '16:00',
     active: raw.active ?? true,
+    paid: raw.paid ?? false,
     packStartedOn: raw.packStartedOn ?? null,
     note: raw.note ?? '',
     sortOrder: raw.sortOrder ?? 0,

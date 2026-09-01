@@ -19,6 +19,7 @@ type StudentRow = {
   time_hm: string | null
   schedule?: { weekday: number; timeHm: string }[] | null
   active: boolean
+  paid?: boolean | null
   pack_started_on: string | null
   note: string | null
   sort_order?: number | null
@@ -56,6 +57,7 @@ function mapStudent(r: StudentRow): TutorStudent {
     timeHm: r.time_hm ?? '16:00',
     slots: r.schedule ?? [],
     active: r.active,
+    paid: r.paid ?? false,
     packStartedOn: r.pack_started_on,
     note: r.note ?? '',
     sortOrder: r.sort_order ?? 0,
@@ -144,7 +146,7 @@ export async function upsertStudentRow(userId: string, s: TutorStudent) {
     note: s.note,
     created_at: s.createdAt,
   }
-  const withSort = { ...base, sort_order: s.sortOrder }
+  const withSort = { ...base, sort_order: s.sortOrder, paid: s.paid }
   const full = { ...withSort, schedule: s.slots }
   const first = await supabase.from('tutor_students').upsert(full)
   if (!first.error) return

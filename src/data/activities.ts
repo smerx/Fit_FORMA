@@ -2,20 +2,6 @@ import type { ActivityTemplate } from '../types'
 
 export const ACTIVITIES: ActivityTemplate[] = [
   {
-    id: 'mowing',
-    name: 'Покос травы',
-    met: 5.5,
-    emoji: '🌿',
-    hint: 'Газонокосилка, триммер, ручная коса',
-  },
-  {
-    id: 'wood',
-    name: 'Работа с древесиной',
-    met: 4.5,
-    emoji: '🪵',
-    hint: 'Пиление, рубка, столярка',
-  },
-  {
     id: 'elliptical-easy',
     name: 'Эллипсоид · лёгкий',
     met: 5,
@@ -37,20 +23,6 @@ export const ACTIVITIES: ActivityTemplate[] = [
     hint: 'Высокая нагрузка',
   },
   {
-    id: 'programming',
-    name: 'Программирование',
-    met: 1.5,
-    emoji: '💻',
-    hint: 'Сидячая работа за компьютером',
-  },
-  {
-    id: 'tutoring',
-    name: 'Репетиторство',
-    met: 1.8,
-    emoji: '📚',
-    hint: 'Занятие сидя или у доски',
-  },
-  {
     id: 'walk',
     name: 'Ходьба',
     met: 3.5,
@@ -58,18 +30,18 @@ export const ACTIVITIES: ActivityTemplate[] = [
     hint: 'Спокойный шаг',
   },
   {
-    id: 'walk-fast',
-    name: 'Ходьба быстрая',
-    met: 4.8,
-    emoji: '🚶',
-    hint: 'Темп, когда слегка тяжело говорить',
+    id: 'bike',
+    name: 'Велосипед',
+    met: 6.8,
+    emoji: '🚴',
+    hint: 'Умеренный темп',
   },
   {
-    id: 'chores',
-    name: 'Домашние дела',
-    met: 3.3,
-    emoji: '🧹',
-    hint: 'Уборка, сад, перестановка',
+    id: 'swim',
+    name: 'Плавание',
+    met: 6,
+    emoji: '🏊',
+    hint: 'Спокойное непрерывное плавание',
   },
   {
     id: 'custom',

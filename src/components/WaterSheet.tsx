@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useStore } from '../lib/store'
 import { formatDayTitle } from '../lib/dates'
-import { Sheet } from './ui'
+import { NumericInput, Sheet } from './ui'
 
 const PRESETS = [250, 350, 500, 750]
 
@@ -14,11 +14,10 @@ export function WaterSheet() {
   return (
     <Sheet title={`Вода · ${formatDayTitle(date)}`} onClose={() => setOverlay({ type: 'none' })}>
       <div className="flex items-end gap-2">
-        <input
-          type="number"
+        <NumericInput
           min={1}
           value={ml}
-          onChange={(e) => setMl(Math.max(1, Number(e.target.value) || 1))}
+          onChange={setMl}
           className="w-36 bg-transparent text-5xl font-extrabold outline-none"
         />
         <span className="pb-2 text-white/40">мл</span>

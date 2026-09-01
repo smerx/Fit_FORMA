@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Search, Star, PencilLine, ScanLine } from 'lucide-react'
 import { searchLocal } from '../lib/search'
 import { searchOpenFoodFacts } from '../lib/off'
+import { rememberFoodSearchMiss } from '../lib/food-misses'
 import { useStore } from '../lib/store'
 import type { FoodItem, MealType } from '../types'
 import { MEALS } from '../lib/labels'
@@ -191,7 +192,10 @@ export function FoodSearch() {
       )}
 
       <button
-        onClick={() => setOverlay({ type: 'custom-food', meal, date, followToday })}
+        onClick={() => {
+          rememberFoodSearchMiss(q)
+          setOverlay({ type: 'custom-food', meal, date, followToday, draftName: q.trim() })
+        }}
         className="mt-4 flex h-12 w-full items-center justify-center gap-2 rounded-2xl bg-white/8 font-semibold"
       >
         <PencilLine size={18} /> Свой продукт

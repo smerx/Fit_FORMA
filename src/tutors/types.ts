@@ -19,6 +19,7 @@ export type TutorStudent = {
   weekdays: number[]
   timeHm: string
   active: boolean
+  paid: boolean
   packStartedOn: string | null
   note: string
   sortOrder: number

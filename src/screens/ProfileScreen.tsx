@@ -1,7 +1,7 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import { useStore } from '../lib/store'
 import { bmr, dailyCalorieTarget, withProfileDefaults } from '../lib/nutrition'
-import { Sheet } from '../components/ui'
+import { NumericInput, Sheet } from '../components/ui'
 import { ToolsBoundary } from '../tools/error-boundary'
 import { ToolsSettings } from '../tools/ToolsDock'
 import { TutorsSettings } from '../tutors/TutorsDock'
@@ -221,7 +221,6 @@ function Num({
   label,
   value,
   onChange,
-  step = 1,
 }: {
   label: string
   value: number
@@ -231,11 +230,10 @@ function Num({
   return (
     <label className="block">
       <span className="mb-1 block text-xs text-white/45">{label}</span>
-      <input
-        type="number"
-        step={step}
+      <NumericInput
         value={value}
-        onChange={(e) => onChange(Number(e.target.value) || 0)}
+        onChange={onChange}
+        min={0}
         className="h-12 w-full rounded-2xl bg-white/8 px-3 outline-none"
       />
     </label>

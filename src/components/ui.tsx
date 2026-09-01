@@ -1,7 +1,64 @@
-import type { ReactNode } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { CATEGORY_COLOR } from '../data/foods'
 import type { FoodForm, FoodItem } from '../types'
 import { formLabel } from '../lib/labels'
+
+export function NumericInput({
+  value,
+  onChange,
+  min,
+  max,
+  className = '',
+  ariaLabel,
+}: {
+  value: number
+  onChange: (value: number) => void
+  min?: number
+  max?: number
+  className?: string
+  ariaLabel?: string
+}) {
+  const [text, setText] = useState(String(value))
+  const focused = useRef(false)
+
+  useEffect(() => {
+    if (!focused.current) setText(String(value))
+  }, [value])
+
+  return (
+    <input
+      type="text"
+      inputMode="decimal"
+      value={text}
+      aria-label={ariaLabel}
+      onFocus={() => {
+        focused.current = true
+      }}
+      onChange={(event) => {
+        const raw = event.target.value
+          .replace(',', '.')
+          .replace(/[^\d.]/g, '')
+          .replace(/(\..*)\./g, '$1')
+        setText(raw)
+        if (raw === '' || raw === '.') return
+        const parsed = Number(raw)
+        if (Number.isFinite(parsed)) onChange(parsed)
+      }}
+      onBlur={() => {
+        focused.current = false
+        if (text === '' || text === '.') {
+          setText(String(value))
+          return
+        }
+        const parsed = Number(text)
+        const clamped = Math.min(max ?? Infinity, Math.max(min ?? -Infinity, parsed))
+        onChange(clamped)
+        setText(String(clamped))
+      }}
+      className={className}
+    />
+  )
+}
 
 export function FoodThumb({
   food,

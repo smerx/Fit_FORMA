@@ -5,7 +5,7 @@ import { macrosForGrams } from '../lib/nutrition'
 import { formHint } from '../lib/labels'
 import { formatDayTitle } from '../lib/dates'
 import { defaultPortionGrams, portionPresets, portionUnit } from '../lib/portions'
-import { FoodThumb, FormBadge, Sheet } from './ui'
+import { FoodThumb, FormBadge, NumericInput, Sheet } from './ui'
 
 export function GramSheet() {
   const { overlay, setOverlay, addFood, snapshot, toggleFavorite } = useStore()
@@ -50,12 +50,11 @@ export function GramSheet() {
 
       <div className="mb-4 rounded-3xl bg-white/5 p-4">
         <div className="flex items-end justify-between">
-          <input
-            type="number"
+          <NumericInput
             value={grams}
             min={1}
             max={1500}
-            onChange={(e) => setGrams(Math.max(1, Number(e.target.value) || 1))}
+            onChange={setGrams}
             className="w-28 bg-transparent text-5xl font-extrabold outline-none"
           />
           <span className="pb-2 text-lg text-white/50">{unit}</span>

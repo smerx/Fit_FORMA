@@ -59,12 +59,30 @@ function TabBtn({ on, onClick, children }: { on: boolean; onClick: () => void; c
 function DayPane({ onConvertTrial }: { onConvertTrial: (eventId: string) => void }) {
   const { students, lessons, events, setLesson, removeEvent } = useTutors()
   const [date, setDate] = useState(todayIso)
+  const followsTodayRef = useRef(true)
   const [pick, setPick] = useState(false)
   const [pickTime, setPickTime] = useState('16:00')
   const [eventEdit, setEventEdit] = useState<null | { id?: string }>(null)
   const today = todayIso()
   const rows = dayRows(students, lessons, date)
   const dayEvents = events.filter((e) => e.date === date)
+
+  useEffect(() => {
+    const syncDay = () => {
+      if (followsTodayRef.current && document.visibilityState === 'visible') setDate(todayIso())
+    }
+    document.addEventListener('visibilitychange', syncDay)
+    window.addEventListener('focus', syncDay)
+    return () => {
+      document.removeEventListener('visibilitychange', syncDay)
+      window.removeEventListener('focus', syncDay)
+    }
+  }, [])
+
+  function chooseDate(next: string) {
+    followsTodayRef.current = next === todayIso()
+    setDate(next)
+  }
   if (eventEdit) {
     return (
       <EventSheet
@@ -89,19 +107,19 @@ function DayPane({ onConvertTrial }: { onConvertTrial: (eventId: string) => void
     <div className="space-y-4">
       <header className="flex items-center justify-between">
         <div className="flex items-center">
-          <button className="flex h-11 w-11 items-center justify-center" onClick={() => setDate(shiftIso(date, -1))}>
+          <button className="flex h-11 w-11 items-center justify-center" onClick={() => chooseDate(shiftIso(date, -1))}>
             <ChevronLeft />
           </button>
           <div>
             <h2 className="text-xl font-extrabold">{formatDayTitle(date)}</h2>
             <p className="text-xs capitalize text-white/40">{formatWeekday(date)}</p>
           </div>
-          <button className="flex h-11 w-11 items-center justify-center" onClick={() => setDate(shiftIso(date, 1))}>
+          <button className="flex h-11 w-11 items-center justify-center" onClick={() => chooseDate(shiftIso(date, 1))}>
             <ChevronRight />
           </button>
         </div>
         {date !== today && (
-          <button onClick={() => setDate(today)} className="h-10 rounded-full bg-white/8 px-3 text-sm">
+          <button onClick={() => chooseDate(today)} className="h-10 rounded-full bg-white/8 px-3 text-sm">
             Сегодня
           </button>
         )}
@@ -390,7 +408,7 @@ function EventSheet({
 }
 
 function ListPane({ onNew, onOpen }: { onNew: () => void; onOpen: (id: string) => void }) {
-  const { students, lessons, reorderStudents } = useTutors()
+  const { students, lessons, reorderStudents, toggleStudentPaid } = useTutors()
   const today = todayIso()
   const bySort = useMemo(
     () =>
@@ -408,12 +426,21 @@ function ListPane({ onNew, onOpen }: { onNew: () => void; onOpen: (id: string) =
   const skipClickRef = useRef(false)
   const startRef = useRef({ x: 0, y: 0 })
   const orderRef = useRef(order)
+  const tapRef = useRef<{ id: string; at: number } | null>(null)
+  const openTimerRef = useRef<number | null>(null)
   orderRef.current = order
 
   useEffect(() => {
     if (dragIdRef.current) return
     setOrder(bySort.map((s) => s.id))
   }, [bySort])
+
+  useEffect(
+    () => () => {
+      if (openTimerRef.current != null) window.clearTimeout(openTimerRef.current)
+    },
+    [],
+  )
 
   function clearHold() {
     if (holdRef.current != null) {
@@ -479,6 +506,28 @@ function ListPane({ onNew, onOpen }: { onNew: () => void; onOpen: (id: string) =
     }
   }
 
+  function onStudentTap(id: string) {
+    if (skipClickRef.current) {
+      skipClickRef.current = false
+      return
+    }
+    const now = Date.now()
+    if (tapRef.current?.id === id && now - tapRef.current.at < 320) {
+      if (openTimerRef.current != null) window.clearTimeout(openTimerRef.current)
+      openTimerRef.current = null
+      tapRef.current = null
+      void toggleStudentPaid(id)
+      return
+    }
+    if (openTimerRef.current != null) window.clearTimeout(openTimerRef.current)
+    tapRef.current = { id, at: now }
+    openTimerRef.current = window.setTimeout(() => {
+      tapRef.current = null
+      openTimerRef.current = null
+      onOpen(id)
+    }, 320)
+  }
+
   const list = order
     .map((id) => students.find((s) => s.id === id))
     .filter((s): s is TutorStudent => Boolean(s))
@@ -488,7 +537,9 @@ function ListPane({ onNew, onOpen }: { onNew: () => void; onOpen: (id: string) =
       <button onClick={onNew} className="h-12 w-full rounded-2xl bg-mint font-bold text-bg">
         Новый ученик
       </button>
-      <p className="text-xs text-white/40">Удержи палец на ученике и перетащи, чтобы поменять местами.</p>
+      <p className="text-xs text-white/40">
+        Один тап — открыть. Двойной — оплачен/не оплачен. Удержание — поменять местами.
+      </p>
       {list.length === 0 && <p className="text-sm text-white/30">Пока никого</p>}
       {list.map((s) => {
         const left = remainingInPack(s, lessons)
@@ -496,13 +547,7 @@ function ListPane({ onNew, onOpen }: { onNew: () => void; onOpen: (id: string) =
           <button
             key={s.id}
             id={`tutor-stu-${s.id}`}
-            onClick={() => {
-              if (skipClickRef.current) {
-                skipClickRef.current = false
-                return
-              }
-              onOpen(s.id)
-            }}
+            onClick={() => onStudentTap(s.id)}
             onPointerDown={(e) => onPointerDown(s.id, e)}
             onPointerMove={onPointerMove}
             onPointerUp={() => void onPointerUp()}
@@ -513,7 +558,7 @@ function ListPane({ onNew, onOpen }: { onNew: () => void; onOpen: (id: string) =
             }}
             style={{ touchAction: dragId ? 'none' : 'pan-y', userSelect: 'none' }}
             className={`flex w-full items-center gap-2 rounded-3xl px-3 py-3 text-left ${
-              dragId === s.id ? 'bg-mint/20' : 'bg-card'
+              dragId === s.id ? 'bg-white/15' : s.paid ? 'bg-mint/20' : 'bg-red-500/20'
             }`}
           >
             <GripVertical size={16} className="shrink-0 text-white/25" />

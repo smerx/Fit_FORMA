@@ -7,6 +7,10 @@ import { useStore } from '../lib/store'
 import { formatClock, formatLongDate, shiftIso, todayIso } from '../lib/dates'
 import { mealLabel } from '../lib/labels'
 import { entryUnit } from '../lib/portions'
+import { readFoodSearchMisses } from '../lib/food-misses'
+import { buildTutorsAiText } from '../tutors/export-text'
+import { readTutorSyncLog } from '../tutors/diagnostics'
+import { useTutorsOptional } from '../tutors/store'
 import type { ActivityEntry, FoodEntry, WaterEntry, WeightLog } from '../types'
 
 type Period = 1 | 7 | 14 | 30 | 0
@@ -53,43 +57,77 @@ export function LogsDock() {
   )
 }
 
-function periodLabel(n: Period): string {
-  if (n === 0) return 'всё время'
-  if (n === 1) return 'сегодня'
-  return `${n} дней`
-}
-
-function itemLine(item: LogItem): string {
+function itemLines(item: LogItem): string[] {
   const time = formatClock(item.at) || '—'
   if (item.kind === 'food') {
     const e = item.entry
-    return `${time} еда · ${mealLabel(e.meal)} · ${e.name} · ${e.grams} ${entryUnit(e.foodId)} · ${e.kcal} ккал · Б${Math.round(e.protein)} Ж${Math.round(e.fat)} У${Math.round(e.carbs)}`
+    return [
+      `${mealLabel(e.meal)} | ${e.name} | ${e.grams} ${entryUnit(e.foodId)} | ${e.kcal} ккал | Б ${Math.round(e.protein)} г · Ж ${Math.round(e.fat)} г · У ${Math.round(e.carbs)} г | ${time}`,
+    ]
   }
-  if (item.kind === 'water') return `${time} вода · ${item.entry.ml} мл`
+  if (item.kind === 'water') return [`Вода | ${item.entry.ml} мл | ${time}`]
   if (item.kind === 'activity') {
     const e = item.entry
-    const note = e.note ? ` · заметка: ${e.note}` : ''
-    return `${time} тренировка · ${e.name} · ${e.minutes} мин · ${e.kcal} ккал${note}`
+    const lines = [`Активность | ${e.name} | сожжено ${e.kcal} ккал | ${e.minutes} мин | ${time}`]
+    if (e.note) lines.push(`Комментарий: ${e.note}`)
+    return lines
   }
-  return `${time} вес · ${item.entry.weight.toFixed(1)} кг`
+  return [`Вес | ${item.entry.weight.toFixed(1)} кг | ${time}`]
 }
 
-function buildAiText(groups: [string, LogItem[]][], period: Period): string {
-  const lines = [
-    `Дневник Форма — период: ${periodLabel(period)}`,
-    'Формат: время · тип · детали (удобно для разбора рациона и тренировок).',
-    '',
-  ]
+function buildAiText(groups: [string, LogItem[]][], tutorsText: string): string {
+  const lines = ['Питание:', '']
   for (const [date, rows] of groups) {
-    lines.push(formatLongDate(date))
-    for (const row of rows) lines.push(itemLine(row))
+    lines.push(format(parseISO(date), 'dd.MM.yyyy'))
+    for (const row of rows) lines.push(...itemLines(row))
     lines.push('')
+  }
+  lines.push(tutorsText)
+
+  const syncLog = readTutorSyncLog().slice(-20)
+  const misses = readFoodSearchMisses()
+    .slice()
+    .sort((a, b) => b.count - a.count || b.lastAt.localeCompare(a.lastAt))
+    .slice(0, 20)
+  lines.push('', 'Служебный журнал')
+  if (!syncLog.length && !misses.length) {
+    lines.push('Ошибок синхронизации и неудачных поисков не записано.')
+  } else {
+    for (const row of syncLog) {
+      lines.push(`${format(parseISO(row.at), 'dd.MM.yyyy HH:mm')} | ${row.message}`)
+    }
+    if (misses.length) {
+      lines.push('Не найдено в каталоге:')
+      for (const miss of misses) lines.push(`${miss.query} | запросов: ${miss.count}`)
+    }
   }
   return lines.join('\n').trim()
 }
 
+async function copyText(text: string): Promise<boolean> {
+  try {
+    await navigator.clipboard.writeText(text)
+    return true
+  } catch {
+    try {
+      const area = document.createElement('textarea')
+      area.value = text
+      area.style.position = 'fixed'
+      area.style.opacity = '0'
+      document.body.appendChild(area)
+      area.select()
+      const copied = document.execCommand('copy')
+      area.remove()
+      return copied
+    } catch {
+      return false
+    }
+  }
+}
+
 function LogsApp() {
   const { snapshot } = useStore()
+  const tutors = useTutorsOptional()
   const [period, setPeriod] = useState<Period>(7)
   const [copied, setCopied] = useState(false)
   const today = todayIso()
@@ -113,7 +151,7 @@ function LogsApp() {
       if (e.date < from || e.date > today) continue
       out.push({ kind: 'weight', at: e.createdAt || e.date, date: e.date, entry: e })
     }
-    return out.sort((a, b) => b.at.localeCompare(a.at) || b.date.localeCompare(a.date))
+    return out.sort((a, b) => a.date.localeCompare(b.date) || a.at.localeCompare(b.at))
   }, [snapshot, from, today])
 
   const groups = useMemo(() => {
@@ -127,12 +165,15 @@ function LogsApp() {
   }, [items])
 
   async function copyAi() {
-    const text = buildAiText(groups, period)
-    try {
-      await navigator.clipboard.writeText(text || 'Записей за период нет.')
+    const tutorsText = tutors
+      ? buildTutorsAiText(tutors.students, tutors.lessons, tutors.events)
+      : 'Ученики\nДанные модуля недоступны.'
+    const text = buildAiText(groups, tutorsText)
+    const ok = await copyText(text || 'Записей за период нет.')
+    if (ok) {
       setCopied(true)
       window.setTimeout(() => setCopied(false), 1600)
-    } catch {
+    } else {
       setCopied(false)
     }
   }

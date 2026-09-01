@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { useStore } from '../lib/store'
 import { rememberLocalBarcode } from '../data/barcodes-local'
 import { formatDayTitle } from '../lib/dates'
-import { Sheet } from './ui'
+import { NumericInput, Sheet } from './ui'
 
 export function CustomFoodSheet() {
   const { overlay, setOverlay, addCustomFood } = useStore()
@@ -38,7 +38,7 @@ export function CustomFoodSheet() {
         ) : null}
         <Field label="Название" value={name} onChange={setName} placeholder="Например, молоко Ангара 2,5%" />
         <div className="grid grid-cols-2 gap-3">
-          <Num label="Граммы" value={grams} onChange={setGrams} />
+          <Num label="Граммы" value={grams} min={1} onChange={setGrams} />
           <Num label="Ккал / 100 г" value={kcal} onChange={setKcal} />
           <Num label="Белки / 100 г" value={protein} onChange={setProtein} />
           <Num label="Жиры / 100 г" value={fat} onChange={setFat} />
@@ -96,18 +96,20 @@ function Num({
   label,
   value,
   onChange,
+  min = 0,
 }: {
   label: string
   value: number
   onChange: (v: number) => void
+  min?: number
 }) {
   return (
     <label className="block">
       <span className="mb-1 block text-xs text-white/45">{label}</span>
-      <input
-        type="number"
+      <NumericInput
         value={value}
-        onChange={(e) => onChange(Number(e.target.value) || 0)}
+        onChange={onChange}
+        min={min}
         className="h-12 w-full rounded-2xl bg-white/8 px-3 outline-none"
       />
     </label>

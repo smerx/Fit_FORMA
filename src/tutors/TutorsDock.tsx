@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { ChevronLeft, GraduationCap } from 'lucide-react'
+import { ChevronLeft, Download, GraduationCap, Upload } from 'lucide-react'
 import { ToolsBoundary } from '../tools/error-boundary'
 import { TutorsApp } from './TutorsApp'
 import { useTutorsOptional } from './store'
@@ -70,6 +70,8 @@ function Crash({ onClose }: { onClose: () => void }) {
 export function TutorsSettings() {
   const tutors = useTutorsOptional()
   const [details, setDetails] = useState(tutors?.settings.payDetails ?? '')
+  const [backupMessage, setBackupMessage] = useState('')
+  const fileRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     setDetails(tutors?.settings.payDetails ?? '')
@@ -77,6 +79,42 @@ export function TutorsSettings() {
 
   if (!tutors) return null
   const s = tutors.settings
+
+  function downloadBackup() {
+    const blob = new Blob([tutors!.exportBackup()], { type: 'application/json;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = `forma-ucheniki-${todayIso()}.json`
+    link.click()
+    URL.revokeObjectURL(url)
+    setBackupMessage('Резервная копия скачана')
+  }
+
+  async function restoreBackup(file: File) {
+    try {
+      const raw = await file.text()
+      const parsed = JSON.parse(raw) as {
+        data?: { students?: unknown[]; lessons?: unknown[]; events?: unknown[] }
+      }
+      const students = parsed.data?.students?.length ?? 0
+      const lessons = parsed.data?.lessons?.length ?? 0
+      const events = parsed.data?.events?.length ?? 0
+      const ok = window.confirm(
+        `Добавить из копии: учеников ${students}, занятий ${lessons}, событий ${events}? Текущие данные не удаляются.`,
+      )
+      if (!ok) return
+      const result = await tutors!.importBackup(raw)
+      setBackupMessage(
+        `Восстановлено: ${result.students} учеников, ${result.lessons} занятий, ${result.events} событий`,
+      )
+    } catch {
+      setBackupMessage('Не удалось прочитать резервную копию')
+    } finally {
+      if (fileRef.current) fileRef.current.value = ''
+    }
+  }
+
   return (
     <div className="space-y-3 rounded-3xl bg-white/5 p-3">
       <div className="text-sm font-semibold">Ученики</div>
@@ -121,6 +159,33 @@ export function TutorsSettings() {
           className="min-h-16 w-full rounded-2xl bg-white/8 p-3 text-sm outline-none"
         />
       </label>
+      <div className="grid grid-cols-2 gap-2">
+        <button
+          type="button"
+          onClick={downloadBackup}
+          className="flex h-11 items-center justify-center gap-2 rounded-2xl bg-white/8 text-sm"
+        >
+          <Download size={15} /> Скачать копию
+        </button>
+        <button
+          type="button"
+          onClick={() => fileRef.current?.click()}
+          className="flex h-11 items-center justify-center gap-2 rounded-2xl bg-white/8 text-sm"
+        >
+          <Upload size={15} /> Восстановить
+        </button>
+        <input
+          ref={fileRef}
+          type="file"
+          accept="application/json,.json"
+          className="hidden"
+          onChange={(event) => {
+            const file = event.target.files?.[0]
+            if (file) void restoreBackup(file)
+          }}
+        />
+      </div>
+      {backupMessage ? <p className="text-[11px] text-white/45">{backupMessage}</p> : null}
     </div>
   )
 }
